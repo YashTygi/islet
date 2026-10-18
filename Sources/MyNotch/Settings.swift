@@ -78,7 +78,7 @@ private struct SettingsView: View {
                 case .notch: NotchPage(prefs: services.prefs)
                 case .actions: ActionsPage(prefs: services.prefs)
                 case .agents: AgentsPage(prefs: services.prefs)
-                case .about: AboutPage()
+                case .about: AboutPage(openOnboarding: services.openOnboarding)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -401,6 +401,7 @@ enum CLIInstaller {
 // MARK: About
 
 private struct AboutPage: View {
+    let openOnboarding: () -> Void
     var body: some View {
         VStack(spacing: 12) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 96, height: 96)
@@ -410,6 +411,7 @@ private struct AboutPage: View {
                 .font(.caption).foregroundStyle(.secondary)
             Text("Everything stays on this Mac. No accounts, no analytics.")
                 .font(.caption).foregroundStyle(.secondary)
+            Button("Show setup again", action: openOnboarding)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

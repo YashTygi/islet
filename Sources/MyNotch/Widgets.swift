@@ -109,6 +109,7 @@ final class Services {
     let camera = CameraController()
     let ringLight = RingLight()
     var openSettings: () -> Void = {}
+    var openOnboarding: () -> Void = {}
 
     init(activities: ActivityCenter, tray: TrayStore) {
         agents = AgentStore(center: activities)

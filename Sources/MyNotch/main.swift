@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let activities = ActivityCenter()
     private lazy var services = Services(activities: activities, tray: tray)
     private lazy var settings = SettingsWindow(services: services, activities: activities)
+    private let onboarding = OnboardingWindow()
     private let events = EventBus()
     private lazy var power = PowerService(center: activities)
     private lazy var bluetooth = BluetoothService(center: activities)
@@ -15,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey = HotkeyMonitor()
     private let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
     private var dragMonitors: [Any] = []
+    private var calendarStarted = false
     private var dragCountAtMouseDown = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -37,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.controllers.forEach { $0.model.setActivity(on) }
         }
         services.openSettings = { [weak self] in self?.settings.show() }
+        services.openOnboarding = { [weak self] in self?.onboarding.show() }
         services.prefs.onChange = { [weak self] in self?.applyPrefs() }
         applyPrefs()
         events.onAgent = { [weak self] in self?.services.agents.apply($0) }
@@ -60,7 +63,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         media.start()
         power.start()
         bluetooth.start()
-        calendar.start()
+        // Fresh install: permissions are asked step by step in onboarding, not all at launch.
+        let firstRun = !OnboardingWindow.done || ProcessInfo.processInfo.environment["MYNOTCH_ONBOARDING"] != nil
+        if !firstRun { calendar.start() }
         if let port = ProcessInfo.processInfo.environment["MYNOTCH_TEST_TUNNEL"].flatMap(Int.init) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.services.tunnel.start(port: port) }  // dev hook
         }
@@ -80,7 +85,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for c in self.controllers where c !== target { c.model.unlock(pointerInside: false) }
             target?.toggleLock()
         }
-        hotkey.start()
+        hotkey.start(prompt: !firstRun)
+        if firstRun {
+            onboarding.show()
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, OnboardingWindow.done, !self.calendarStarted else { return }
+                    self.calendarStarted = true
+                    self.calendar.start()
+                }
+            }
+        }
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main

@@ -114,12 +114,12 @@ final class HotkeyMonitor {
 
     private var trustPoll: Timer?
 
-    func start() {
+    func start(prompt: Bool = true) {
         debugLog("hotkey: accessibility trusted=\(AXIsProcessTrusted()) path=\(Bundle.main.bundlePath)")
         guard !AXIsProcessTrusted() else { install(); return }
         // Shows the system prompt pointing at Privacy & Security → Accessibility, then waits for the
         // grant so no relaunch is needed. Checks every 2 s only until trusted.
-        AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        if prompt { AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary) }
         trustPoll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, AXIsProcessTrusted() else { return }
