@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:my-notch-app}",
+            "name": "Debug notch",
+            "target": "notch",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug notch"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:my-notch-app}",
+            "name": "Release notch",
+            "target": "notch",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release notch"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:my-notch-app}",
+            "name": "Debug MyNotch",
+            "target": "MyNotch",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug MyNotch"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:my-notch-app}",
+            "name": "Release MyNotch",
+            "target": "MyNotch",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release MyNotch"
+        }
+    ]
+}
