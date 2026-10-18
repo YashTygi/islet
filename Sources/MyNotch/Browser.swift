@@ -19,15 +19,12 @@ enum Browser {
     static func isSafari(_ app: NSRunningApplication?) -> Bool { app?.bundleIdentifier == "com.apple.Safari" }
 
     @discardableResult
-    static func script(_ src: String) -> NSAppleEventDescriptor? {
-        var err: NSDictionary?
-        return NSAppleScript(source: src)?.executeAndReturnError(&err)
-    }
+    static func script(_ src: String) async -> String? { await appleScript(src) }
 
     // MARK: Tabs
 
     /// Every tab of every window as a Markdown list.
-    static func allTabsMarkdown(_ app: NSRunningApplication?) -> (text: String, count: Int)? {
+    static func allTabsMarkdown(_ app: NSRunningApplication?) async -> (text: String, count: Int)? {
         guard let name = app?.localizedName else { return nil }
         let (tabsOf, title) = isSafari(app) ? ("tabs", "name") : ("tabs", "title")
         let src = """
@@ -41,12 +38,12 @@ enum Browser {
         end tell
         return out
         """
-        guard let text = script(src)?.stringValue, !text.isEmpty else { return nil }
+        guard let text = await script(src), !text.isEmpty else { return nil }
         return (text, text.split(separator: "\n").count)
     }
 
     /// Closes tabs whose URL is already open earlier in the same window. Returns how many closed.
-    static func closeDuplicates(_ app: NSRunningApplication?) -> Int {
+    static func closeDuplicates(_ app: NSRunningApplication?) async -> Int {
         guard let name = app?.localizedName else { return 0 }
         let src = """
         set closed to 0
@@ -70,12 +67,12 @@ enum Browser {
         end tell
         return closed
         """
-        return Int(script(src)?.int32Value ?? 0)
+        return Int(await script(src) ?? "") ?? 0
     }
 
-    static func openPrivate(_ url: String, in app: NSRunningApplication?) {
+    static func openPrivate(_ url: String, in app: NSRunningApplication?) async {
         guard let name = app?.localizedName, !isSafari(app) else { return }
-        script("""
+        await script("""
         tell application "\(name)"
           set w to make new window with properties {mode:"incognito"}
           set URL of active tab of w to "\(url.replacingOccurrences(of: "\"", with: "%22"))"
@@ -97,10 +94,10 @@ enum Browser {
     ]
 
     /// Resizes the front browser window (keeps its top-left; height capped to the screen).
-    static func resize(_ app: NSRunningApplication?, width: Int, height: Int) {
+    static func resize(_ app: NSRunningApplication?, width: Int, height: Int) async {
         guard let name = app?.localizedName else { return }
         let maxH = Int(NSScreen.main?.visibleFrame.height ?? 900)
-        script("""
+        await script("""
         tell application "\(name)"
           set b to bounds of front window
           set x to item 1 of b

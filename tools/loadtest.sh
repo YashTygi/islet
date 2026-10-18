@@ -47,6 +47,17 @@ print(f'%-34s now %-6s peak %-6s cpu %5.2fs over %5.1fs (%4.1f%%)  disk +%.0f KB
 }
 idle() { sleep "$1"; }
 hover() { ./soak.sh "$1"; }
+hold() { swift - "$1" <<'SW'   # keep the pointer on the notch so the open nook (App tab polling) runs
+import AppKit
+let secs = Double(CommandLine.arguments[1])!
+let s = NSScreen.main!.frame, o = CGEvent(source: nil)!.location
+func move(_ p: CGPoint) { CGWarpMouseCursorPosition(p); CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap) }
+move(CGPoint(x: s.midX, y: 20)); usleep(50_000); move(CGPoint(x: s.midX + 1, y: 20)); usleep(500_000)
+move(CGPoint(x: s.midX + 20, y: 120))   // inside the open nook
+Thread.sleep(forTimeInterval: secs)
+move(CGPoint(x: s.midX, y: s.height / 2)); usleep(800_000); move(o)
+SW
+}
 agents() { for i in $(seq 1 "$1"); do $N agent "$(echo running waiting done error | tr ' ' '\n' | sed -n "$((i % 4 + 1))p")" --id "a$((i % 120))" --name "Agent $((i % 120))" --project "proj$((i % 30))" --message "msg $i"; done; }
 tasks() { for i in $(seq 1 "$1"); do $N run sleep 1 & done; wait; }
 downloads() { swift - "$1" <<'SW'
@@ -68,5 +79,6 @@ phase "agent storm: 1200 events/120 ids"  agents 1200
 phase "task storm: 60 parallel notch run" tasks 60
 phase "download storm: 40 concurrent"     downloads 40
 phase "hover 30 cycles (all tabs data)"   hover 30
+phase "hold open 60s (App tab polling)"   hold 60
 phase "idle 60s (settle)"                 idle 60
 rm -rf "$S"

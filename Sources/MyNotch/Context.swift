@@ -40,8 +40,6 @@ final class ContextService {
     private(set) var icon: NSImage?
     /// Figma eyedropper history (hex), newest first.
     private(set) var colors: [String] = UserDefaults.standard.stringArray(forKey: "pickedColors") ?? []
-    @ObservationIgnored private var tabScripts: [String: NSAppleScript?] = [:]
-    @ObservationIgnored private var finderScript: NSAppleScript?
 
     func start() {
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
@@ -140,25 +138,19 @@ final class ContextService {
     }
 
     /// Active tab of Chrome / Brave / Safari via AppleScript (asks for Automation permission once).
-    func browserTab() -> (title: String, url: String)? {
+    func browserTab() async -> (title: String, url: String)? {
         guard let id = app?.bundleIdentifier, let name = app?.localizedName else { return nil }
         let src = id == "com.apple.Safari"
-            ? "tell application \"Safari\" to return {name, URL} of current tab of front window"
-            : "tell application \"\(name)\" to return {title, URL} of active tab of front window"
-        var err: NSDictionary?
-        // Compiled once per browser and reused (this runs every 3 s while the App tab is open).
-        if tabScripts[id] == nil {
-            let s = NSAppleScript(source: src)
-            s?.compileAndReturnError(&err)
-            tabScripts[id] = s
-        }
-        guard let out = tabScripts[id]??.executeAndReturnError(&err), out.numberOfItems == 2,
-              let title = out.atIndex(1)?.stringValue, let url = out.atIndex(2)?.stringValue else { return nil }
-        return (title, url)
+            ? "tell application \"Safari\" to return (name of current tab of front window) & linefeed & (URL of current tab of front window)"
+            : "tell application \"\(name)\" to return (title of active tab of front window) & linefeed & (URL of active tab of front window)"
+        guard let out = await appleScript(src) else { return nil }
+        let lines = out.components(separatedBy: "\n")
+        guard lines.count >= 2 else { return nil }
+        return (lines.dropLast().joined(separator: "\n"), lines.last ?? "")
     }
 
     /// Finder's current folder (front window, else Desktop) and selected items, as POSIX paths.
-    func finderInfo() -> (folder: String?, selection: [String]) {
+    func finderInfo() async -> (folder: String?, selection: [String]) {
         let src = """
         tell application "Finder"
           set out to ""
@@ -173,12 +165,7 @@ final class ContextService {
           return f & "||" & out
         end tell
         """
-        var err: NSDictionary?
-        if finderScript == nil {
-            finderScript = NSAppleScript(source: src)
-            finderScript?.compileAndReturnError(&err)
-        }
-        guard let out = finderScript?.executeAndReturnError(&err).stringValue else { return (nil, []) }
+        guard let out = await appleScript(src) else { return (nil, []) }
         let parts = out.components(separatedBy: "||")
         let folder = parts.first.flatMap { $0.isEmpty ? nil : $0 }
         let sel = parts.count > 1 ? parts[1].split(separator: "\n").map(String.init) : []
@@ -224,6 +211,13 @@ final class ContextService {
             }
         }
     }
+}
+
+/// Runs AppleScript in a separate `osascript` process: keeps macOS's AppleScript engine (~12 MB) out of
+/// MyNotch's memory. Automation permission stays attributed to MyNotch (the responsible app).
+func appleScript(_ src: String) async -> String? {
+    guard let out = await runTool("/usr/bin/osascript", ["-e", src], timeout: 5) else { return nil }
+    return out.hasSuffix("\n") ? String(out.dropLast()) : out
 }
 
 func copyToClipboard(_ s: String) {
@@ -321,9 +315,9 @@ struct AppTabView: View {
                 git.wrappedValue = nil; ports.wrappedValue = []
             }
         case .finder:
-            finder.wrappedValue = ctx.finderInfo()
+            finder.wrappedValue = await ctx.finderInfo()
         case .browser:
-            let t = ctx.browserTab()
+            let t = await ctx.browserTab()
             title.wrappedValue = t?.title
             url.wrappedValue = t?.url
         default: break
@@ -373,7 +367,7 @@ struct AppTabView: View {
                     // Window sizes for responsive checks: on every page, not just localhost.
                     row("Size") {
                         ForEach(Browser.sizes, id: \.name) { s in
-                            chip(s.name, s.symbol) { Browser.resize(ctx.app, width: s.w, height: s.h) }
+                            chip(s.name, s.symbol) { Task { await Browser.resize(ctx.app, width: s.w, height: s.h) } }
                         }
                     }
                     row("Link") {
@@ -398,16 +392,16 @@ struct AppTabView: View {
                     if Browser.tabActions {
                         row("Tabs") {
                             chip("All tabs → Markdown", "list.bullet.rectangle") {
-                                if let r = Browser.allTabsMarkdown(ctx.app) { copyToClipboard(r.text); done("\(r.count) tabs copied") }
+                                Task { if let r = await Browser.allTabsMarkdown(ctx.app) { copyToClipboard(r.text); done("\(r.count) tabs copied") } }
                             }
                             chip("Close duplicates", "square.on.square.dashed") {
-                                let n = Browser.closeDuplicates(ctx.app); done(n == 0 ? "No duplicates" : "Closed \(n)")
+                                Task { let n = await Browser.closeDuplicates(ctx.app); done(n == 0 ? "No duplicates" : "Closed \(n)") }
                             }
                         }
                     }
                     row("Open in") {
                         ForEach(others, id: \.id) { b in chip(b.name, "arrow.up.forward.app") { Browser.open(u, inBrowserAt: b.path) } }
-                        if !Browser.isSafari(ctx.app) { chip("Private", "eye.slash") { Browser.openPrivate(u, in: ctx.app) } }
+                        if !Browser.isSafari(ctx.app) { chip("Private", "eye.slash") { Task { await Browser.openPrivate(u, in: ctx.app) } } }
                     }
                     if let gh = Browser.github(u) { githubRow(gh, pageTitle: pageTitle) }
                     if host == "meet.google.com" {

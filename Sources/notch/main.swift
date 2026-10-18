@@ -127,6 +127,12 @@ case "hook":
         usage()
     }
 
+case "usage":
+    let enc = JSONEncoder()
+    enc.dateEncodingStrategy = .secondsSince1970
+    let w = UsageParser().scan()
+    FileHandle.standardOutput.write((try? enc.encode(w)) ?? Data("null".utf8))
+
 case "settings":
     post(["kind": "settings"])
 
