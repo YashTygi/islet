@@ -1,6 +1,6 @@
-// `notch usage --json`: Claude Code usage for the current 5-hour window.
+// `islet usage --json`: Claude Code usage for the current 5-hour window.
 // Runs in this short-lived process so the scan's memory is returned to macOS the moment it exits;
-// the MyNotch app only ever receives the few bytes of JSON.
+// the Islet app only ever receives the few bytes of JSON.
 import Foundation
 
 struct UsageWindow: Codable {
@@ -15,8 +15,8 @@ struct UsageWindow: Codable {
 /// Off-main, incremental: remembers each file's read offset and only parses assistant lines
 /// that contain usage. Keeps the last 10 h of entries (enough to find the current window).
 final class UsageParser {
-    /// MYNOTCH_CLAUDE_DIR overrides the log folder (load testing only).
-    static let root = ProcessInfo.processInfo.environment["MYNOTCH_CLAUDE_DIR"].map { URL(fileURLWithPath: $0) }
+    /// ISLET_CLAUDE_DIR overrides the log folder (load testing only).
+    static let root = ProcessInfo.processInfo.environment["ISLET_CLAUDE_DIR"].map { URL(fileURLWithPath: $0) }
         ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects")
     private static let window: TimeInterval = 5 * 3600
     private static let keep: TimeInterval = 10 * 3600

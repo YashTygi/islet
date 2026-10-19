@@ -125,7 +125,16 @@ final class NotchModel {
     }
 
     /// Tab actually shown (falls back to Home if the chosen one was switched off).
-    var currentTab: NotchTab { services.prefs.visibleTabs.contains(tab) ? tab : .home }
+    var currentTab: NotchTab { tabs.contains(tab) ? tab : .home }
+
+    /// The front app has context actions (built in, or your own buttons).
+    var hasAppContext: Bool {
+        let ctx = services.context
+        return ctx.context.hasActions || services.prefs.customActions.contains { $0.bundleID == ctx.app?.bundleIdentifier }
+    }
+
+    /// Tabs shown right now: the App tab only exists while the front app has actions.
+    var tabs: [NotchTab] { services.prefs.visibleTabs.filter { $0 != .app || hasAppContext } }
 
     /// Click on the collapsed pill: an agent needing you → jump straight to its window.
     /// +1 = content slides left (moving right through the tabs), -1 = slides right.
@@ -133,7 +142,7 @@ final class NotchModel {
     static let tabSpring = Animation.spring(response: 0.38, dampingFraction: 0.92)
 
     func select(_ t: NotchTab, direction: Int? = nil) {
-        let tabs = services.prefs.visibleTabs
+        let tabs = self.tabs
         guard t != currentTab, let to = tabs.firstIndex(of: t) else { return }
         let d = direction ?? (to > (tabs.firstIndex(of: currentTab) ?? 0) ? 1 : -1)
         if d == tabDirection {
@@ -149,13 +158,13 @@ final class NotchModel {
     }
 
     func selectTab(_ index: Int) {
-        let tabs = services.prefs.visibleTabs
+        let tabs = self.tabs
         guard tabs.indices.contains(index) else { return }
         select(tabs[index])
     }
 
     func cycleTab(_ step: Int) {
-        let tabs = services.prefs.visibleTabs
+        let tabs = self.tabs
         let i = tabs.firstIndex(of: currentTab) ?? 0
         select(tabs[(i + step + tabs.count) % tabs.count], direction: step)
     }
@@ -197,12 +206,11 @@ final class NotchModel {
     private func animate(expanded: Bool, activity: Bool, spring: Animation, gen: Int) {
         guard gen == generation else { return }
         if expanded && !isExpanded && services.prefs.haptics { haptic() }
+        if expanded && !isExpanded { services.context.refresh() }
         if expanded && !isExpanded && dropTarget == nil && !fileDragNearby, services.prefs.openToAppTab {
             // Apps with context actions (built in, or your own buttons) open on the App tab;
             // everything else (Music, Mail, …) opens on Home instead of a leftover App tab.
-            let ctx = services.context
-            let custom = services.prefs.customActions.contains { $0.bundleID == ctx.app?.bundleIdentifier }
-            if ctx.context.hasActions || custom { tab = .app } else if tab == .app { tab = .home }
+            if hasAppContext { tab = .app } else if tab == .app { tab = .home }
         }
         withAnimation(spring) {
             isExpanded = expanded
@@ -315,7 +323,7 @@ private struct TopTabs: View {
 
     var body: some View {
         let waiting = model.services.agents.agents.filter { $0.state == .waiting }.count
-        let tabs = model.services.prefs.visibleTabs
+        let tabs = model.tabs
         let index = CGFloat(tabs.firstIndex(of: model.currentTab) ?? 0)
         // The bar itself never changes; one highlight capsule slides to the selected tab.
         ZStack(alignment: .leading) {
@@ -362,6 +370,12 @@ private struct TopRight: View {
     var body: some View {
         HStack(spacing: 6) {
             PrivacyButtons(privacy: model.services.privacy)
+            if model.activities.keepingAwake {
+                Image(systemName: "cup.and.saucer.fill").font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .help("Keeping your Mac awake while agents or tasks run")
+                    .transition(.scale.combined(with: .opacity))
+            }
             if model.isLocked {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 10, weight: .semibold))

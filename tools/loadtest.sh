@@ -1,10 +1,10 @@
 #!/bin/bash
-# Load test: pushes every MyNotch subsystem far past normal use and reports memory, CPU and disk.
+# Load test: pushes every Islet subsystem far past normal use and reports memory, CPU and disk.
 # Usage: tools/loadtest.sh   (moves the mouse during hover phases; restores it)
 set -uo pipefail
 cd "$(dirname "$0")/.."
 S=$(mktemp -d)
-N=build/MyNotch.app/Contents/MacOS/notch
+N=build/Islet.app/Contents/Helpers/islet
 
 # Synthetic Claude logs: 60 MB, mostly huge tool-output lines plus 3000 assistant usage lines.
 mkdir -p "$S/claude/p1"
@@ -21,10 +21,10 @@ with open(sys.argv[1], "w") as f:
     f.write(json.dumps({"type": "user", "timestamp": ts, "message": {"content": "z" * 12_000_000}}) + "\n")  # 12 MB single line
 PY
 
-pkill -x MyNotch; sleep 0.5
-open --env MYNOTCH_CLAUDE_DIR="$S/claude" build/MyNotch.app
+pkill -x Islet; sleep 0.5
+open --env ISLET_CLAUDE_DIR="$S/claude" build/Islet.app
 sleep 3
-P=$(pgrep -x MyNotch)
+P=$(pgrep -x Islet)
 
 stat() {  # footprint now/peak, cumulative CPU seconds, disk bytes written
   local fp; fp=$(footprint -p "$P" 2>/dev/null | awk '/phys_footprint:/{n=$2$3} /peak/{p=$2$3} END{print n" "p}')
@@ -72,11 +72,11 @@ ps.forEach { $0.unpublish() }; Thread.sleep(forTimeInterval: 1)
 SW
 }
 
-echo "MyNotch load test — $(sysctl -n hw.model), $(($(sysctl -n hw.memsize) / 1073741824)) GB"
+echo "Islet load test — $(sysctl -n hw.model), $(($(sysctl -n hw.memsize) / 1073741824)) GB"
 phase "idle 20s (fresh)"                  idle 20
 phase "hover 30 cycles + 60MB usage scan" hover 30
 phase "agent storm: 1200 events/120 ids"  agents 1200
-phase "task storm: 60 parallel notch run" tasks 60
+phase "task storm: 60 parallel islet run" tasks 60
 phase "download storm: 40 concurrent"     downloads 40
 phase "hover 30 cycles (all tabs data)"   hover 30
 phase "hold open 60s (App tab polling)"   hold 60

@@ -55,14 +55,37 @@ final class ContextService {
         guard a?.bundleIdentifier != Bundle.main.bundleIdentifier else { return }  // our own settings window
         app = a
         context = AppContext(a)
+        // Finder is "in front" whenever you're on the desktop; it only counts with a real window open.
+        if context == .finder && !Self.finderHasWindow(a) { context = .other(app: "Finder") }
         icon = a?.icon
         icon?.size = NSSize(width: 32, height: 32)
         debugLog("context: \(context)")
     }
 
+    /// Re-check when the notch opens (Finder windows can close without an app switch).
+    func refresh() {
+        guard let a = app, a.bundleIdentifier == "com.apple.finder" else { return }
+        let ctx: AppContext = Self.finderHasWindow(a) ? .finder : .other(app: "Finder")
+        if ctx != context { context = ctx }
+    }
+
+    /// A real, visible Finder window (layer 0) as opposed to just the desktop. Stage Manager's side-strip
+    /// thumbnails are reported as tiny (~140 pt) Finder windows; Finder windows can't be that small, so
+    /// anything under 250×150 pt doesn't count.
+    private static func finderHasWindow(_ a: NSRunningApplication?) -> Bool {
+        guard let pid = a?.processIdentifier,
+              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
+        else { return false }
+        return list.contains {
+            guard ($0[kCGWindowOwnerPID as String] as? Int32) == pid, ($0[kCGWindowLayer as String] as? Int) == 0,
+                  let b = $0[kCGWindowBounds as String] as? [String: Any] else { return false }
+            return (b["Width"] as? Double ?? 0) >= 250 && (b["Height"] as? Double ?? 0) >= 150
+        }
+    }
+
     // MARK: Reading details (only called from the visible App tab)
 
-    /// Focused window via Accessibility (MyNotch already has it for the hotkey).
+    /// Focused window via Accessibility (Islet already has it for the hotkey).
     private func focusedWindow() -> AXUIElement? {
         guard let pid = app?.processIdentifier else { return nil }
         var win: CFTypeRef?
@@ -214,7 +237,7 @@ final class ContextService {
 }
 
 /// Runs AppleScript in a separate `osascript` process: keeps macOS's AppleScript engine (~12 MB) out of
-/// MyNotch's memory. Automation permission stays attributed to MyNotch (the responsible app).
+/// Islet's memory. Automation permission stays attributed to Islet (the responsible app).
 func appleScript(_ src: String) async -> String? {
     guard let out = await runTool("/usr/bin/osascript", ["-e", src], timeout: 5) else { return nil }
     return out.hasSuffix("\n") ? String(out.dropLast()) : out
@@ -350,7 +373,7 @@ struct AppTabView: View {
                 VStack(alignment: .leading, spacing: 7) {
                     Text(u).font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
                     if url.wrappedValue == nil {
-                        Text("Allow MyNotch to control \(ctx.app?.localizedName ?? "the browser") when macOS asks, to see the current tab.")
+                        Text("Allow Islet to control \(ctx.app?.localizedName ?? "the browser") when macOS asks, to see the current tab.")
                             .font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
                     }
                     if let lan {
@@ -381,7 +404,7 @@ struct AppTabView: View {
                                 Task {
                                     if let f = await Browser.screenshot(ctx.app, title: pageTitle.isEmpty ? host : pageTitle) {
                                         model.tray.add([f]); done("On the shelf")
-                                    } else { done("Allow Screen Recording for MyNotch") }
+                                    } else { done("Allow Screen Recording for Islet") }
                                 }
                             }
                             chip("Link file", "doc.badge.plus") {
@@ -484,7 +507,7 @@ struct AppTabView: View {
                 }
             }
         }
-        Text("Anyone with the public link can open this server until you press Stop (or quit MyNotch). Some dev servers need the tunnel host allowed (e.g. Vite allowedHosts).")
+        Text("Anyone with the public link can open this server until you press Stop (or quit Islet). Some dev servers need the tunnel host allowed (e.g. Vite allowedHosts).")
             .font(.system(size: 9)).foregroundStyle(.orange.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
     }
 
@@ -509,7 +532,7 @@ struct AppTabView: View {
         }
         VStack(alignment: .leading, spacing: 8) {
             if targets.isEmpty {
-                Text("Allow MyNotch to control Finder when macOS asks, to act on the current folder.")
+                Text("Allow Islet to control Finder when macOS asks, to act on the current folder.")
                     .font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
             } else {
                 Text(f.selection.isEmpty ? (f.folder ?? "") : f.selection.count == 1 ? f.selection[0] : "\(f.selection.count) items selected")
@@ -680,7 +703,7 @@ enum TestRunner {
 @MainActor
 func shell(_ command: String, cwd: String, project: String, tasks: TaskStore) {
     let id = UUID().uuidString
-    let log = FileManager.default.temporaryDirectory.appendingPathComponent("mynotch-\(id.prefix(8)).log")
+    let log = FileManager.default.temporaryDirectory.appendingPathComponent("islet-\(id.prefix(8)).log")
     FileManager.default.createFile(atPath: log.path, contents: nil)
     tasks.apply(["id": id, "state": "start", "command": command, "project": project])
     let p = Process()

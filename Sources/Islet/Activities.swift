@@ -1,5 +1,6 @@
 import AppKit
 import EventKit
+import IOKit.pwr_mgt
 import IOBluetooth
 import IOKit.ps
 import SwiftUI
@@ -61,6 +62,10 @@ final class ActivityCenter {
     @ObservationIgnored var runningAgents = 0 { didSet { recompute() } }
     @ObservationIgnored var runningTasks: [RunningTask] = [] { didSet { recompute() } }
     @ObservationIgnored var sounds = true
+    /// Keep the display awake (no sleep, no screen saver) while agents or tasks run.
+    @ObservationIgnored var keepAwakeEnabled = true { didSet { recompute() } }
+    private(set) var keepingAwake = false
+    @ObservationIgnored private var awakeAssertion: IOPMAssertionID = 0
     @ObservationIgnored var haptics = true
     @ObservationIgnored var downloads: [DownloadItem] = [] { didSet { recompute() } }
     @ObservationIgnored var mic = false
@@ -161,7 +166,26 @@ final class ActivityCenter {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { current = next }
             if wasVisible != (next != nil) { onVisibleChange(next != nil) }
         }
+        updateKeepAwake()
         scheduleWake(now: now)
+    }
+
+    /// A power assertion held by macOS (like `caffeinate -d`): no timers or fake input, so it costs nothing.
+    /// Released the moment no agent is running/waiting and no task is running (and on quit, automatically).
+    private func updateKeepAwake() {
+        let busy = keepAwakeEnabled && (runningAgents > 0 || !waitingAgents.isEmpty || !runningTasks.isEmpty)
+        guard busy != keepingAwake else { return }
+        if busy {
+            let ok = IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
+                                                 IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                                                 "Islet: agents or tasks are running" as CFString, &awakeAssertion)
+            keepingAwake = ok == kIOReturnSuccess
+        } else {
+            IOPMAssertionRelease(awakeAssertion)
+            awakeAssertion = 0
+            keepingAwake = false
+        }
+        debugLog("keep awake: \(keepingAwake)")
     }
 
     /// Plain timer: chime and done. Focus/rest: chime and roll into the next phase (Pomodoro).

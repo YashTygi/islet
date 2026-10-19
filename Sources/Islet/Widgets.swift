@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// File in ~/Library/Application Support/MyNotch.
+/// File in ~/Library/Application Support/Islet.
 func appSupportFile(_ name: String) -> URL {
     let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("MyNotch", isDirectory: true)
+        .appendingPathComponent("Islet", isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir.appendingPathComponent(name)
 }
@@ -37,7 +37,7 @@ enum ActivityKind: String, CaseIterable, Identifiable {
         switch self {
         case .agents: "Agent status & needs-you alerts"
         case .privacy: "Mic & camera in use"
-        case .tasks: "Long tasks (notch run)"
+        case .tasks: "Long tasks (islet run)"
         case .downloads: "Downloads & AirDrop progress"
         case .timer: "Timer & focus"
         case .media: "Now playing"
@@ -60,6 +60,7 @@ final class Prefs {
     var sounds: Bool { didSet { d.set(sounds, forKey: "sounds"); onChange() } }
     var hotkey: Bool { didSet { d.set(hotkey, forKey: "hotkey"); onChange() } }
     var haptics: Bool { didSet { d.set(haptics, forKey: "haptics"); onChange() } }
+    var keepAwake: Bool { didSet { d.set(keepAwake, forKey: "keepAwake"); onChange() } }
     /// Finished downloads land on the File Shelf automatically.
     var autoShelf: Bool { didSet { d.set(autoShelf, forKey: "autoShelf"); onChange() } }
     /// Open straight to the App tab when the front app has context actions.
@@ -81,6 +82,7 @@ final class Prefs {
         sounds = d.object(forKey: "sounds") as? Bool ?? true
         hotkey = d.object(forKey: "hotkey") as? Bool ?? true
         haptics = d.object(forKey: "haptics") as? Bool ?? true
+        keepAwake = d.object(forKey: "keepAwake") as? Bool ?? true
         autoShelf = d.bool(forKey: "autoShelf")
         openToAppTab = d.object(forKey: "openToAppTab") as? Bool ?? true
         ringLight = d.object(forKey: "ringLight") as? Bool ?? true

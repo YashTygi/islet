@@ -120,7 +120,7 @@ enum GitOps {
     static func generateMessage(diff: String) async -> String? {
         guard let claude = findTool("claude") else { return nil }
         return await Task.detached {
-            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mynotch-ai-\(UUID().uuidString.prefix(6))")
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("islet-ai-\(UUID().uuidString.prefix(6))")
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: dir) }
             let p = Process()

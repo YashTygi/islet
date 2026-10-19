@@ -42,7 +42,7 @@ let center = MPNowPlayingInfoCenter.default()
 func publish() {
     center.nowPlayingInfo = [
         MPMediaItemPropertyTitle: "Fake Sunset Drive",
-        MPMediaItemPropertyArtist: "MyNotch Test Band",
+        MPMediaItemPropertyArtist: "Islet Test Band",
         MPMediaItemPropertyPlaybackDuration: duration,
         MPNowPlayingInfoPropertyElapsedPlaybackTime: elapsed,
         MPNowPlayingInfoPropertyPlaybackRate: playing ? 1.0 : 0.0,

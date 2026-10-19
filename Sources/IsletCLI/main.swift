@@ -1,18 +1,18 @@
-// notch — tells MyNotch about background work.
+// islet — tells Islet about background work.
 //
-//   notch run <command> [args…]      run a command, show it in the notch, chime when it ends
-//   notch agent <state> [--name N] [--project P] [--id I] [--message M]
+//   islet run <command> [args…]      run a command, show it in the notch, chime when it ends
+//   islet agent <state> [--name N] [--project P] [--id I] [--message M]
 //                                    state: running | waiting | done | error | ended
-//   notch hook claude                Claude Code hook (reads hook JSON on stdin)
-//   notch hook codex <json>          Codex `notify` program
-//   notch settings                   open the control panel
+//   islet hook claude                Claude Code hook (reads hook JSON on stdin)
+//   islet hook codex <json>          Codex `notify` program
+//   islet settings                   open the control panel
 //
-// Events are distributed notifications (com.yashtyagi.MyNotch.event) with string payloads.
-// If MyNotch isn't running they are simply dropped; the CLI never blocks your command.
+// Events are distributed notifications (com.yashtyagi.Islet.event) with string payloads.
+// If Islet isn't running they are simply dropped; the CLI never blocks your command.
 import Foundation
 import Darwin
 
-let eventName = Notification.Name("com.yashtyagi.MyNotch.event")
+let eventName = Notification.Name("com.yashtyagi.Islet.event")
 
 func post(_ info: [String: String]) {
     var info = info
@@ -52,10 +52,10 @@ func option(_ name: String, in args: [String]) -> String? {
 
 func usage() -> Never {
     FileHandle.standardError.write(Data("""
-    usage: notch run <command> [args…]
-           notch agent <running|waiting|done|error|ended> [--name N] [--project P] [--id I] [--message M]
-           notch hook claude | notch hook codex <json>
-           notch settings
+    usage: islet run <command> [args…]
+           islet agent <running|waiting|done|error|ended> [--name N] [--project P] [--id I] [--message M]
+           islet hook claude | islet hook codex <json>
+           islet settings
 
     """.utf8))
     exit(2)
@@ -117,7 +117,7 @@ case "hook":
                   "message": j["message"] as? String ?? ""])
         }
     case "codex":
-        // Codex `notify = ["notch", "hook", "codex"]` passes one JSON argument per finished turn.
+        // Codex `notify = ["islet", "hook", "codex"]` passes one JSON argument per finished turn.
         let j = args.dropFirst().last.flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) } as? [String: Any] ?? [:]
         if (j["type"] as? String) == "agent-turn-complete" {
             post(["kind": "agent", "state": "done", "name": "Codex", "id": "codex-\(project(nil))",

@@ -17,7 +17,7 @@ final class TrayStore {
 
     init() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("MyNotch", isDirectory: true)
+            .appendingPathComponent("Islet", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         file = dir.appendingPathComponent("tray.json")
         load()

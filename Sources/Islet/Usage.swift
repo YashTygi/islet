@@ -18,8 +18,8 @@ final class UsageService {
     private(set) var claude: UsageWindow?
     private(set) var available = FileManager.default.fileExists(atPath: UsageService.root.path)
     @ObservationIgnored private var lastRefresh = Date.distantPast
-    /// MYNOTCH_CLAUDE_DIR overrides the log folder (load testing only; inherited by the CLI).
-    static let root = ProcessInfo.processInfo.environment["MYNOTCH_CLAUDE_DIR"].map { URL(fileURLWithPath: $0) }
+    /// ISLET_CLAUDE_DIR overrides the log folder (load testing only; inherited by the CLI).
+    static let root = ProcessInfo.processInfo.environment["ISLET_CLAUDE_DIR"].map { URL(fileURLWithPath: $0) }
         ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects")
 
     /// Called by visible views; at most once per 30 s.
@@ -27,8 +27,8 @@ final class UsageService {
         guard available, Date.now.timeIntervalSince(lastRefresh) > 30 else { return }
         lastRefresh = .now
         let started = Date.now
-        // Scanned by the bundled `notch` CLI in its own process, so none of the log reading stays in our memory.
-        let cli = Bundle.main.bundlePath + "/Contents/MacOS/notch"
+        // Scanned by the bundled `islet` CLI in its own process, so none of the log reading stays in our memory.
+        let cli = Bundle.main.bundlePath + "/Contents/Helpers/islet"
         if let out = await runTool(cli, ["usage", "--json"], timeout: 30), let data = out.data(using: .utf8) {
             let dec = JSONDecoder()
             dec.dateDecodingStrategy = .secondsSince1970

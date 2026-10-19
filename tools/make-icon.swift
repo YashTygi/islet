@@ -1,4 +1,4 @@
-// Draws the MyNotch app icon (original artwork) and writes Assets/AppIcon.icns.
+// Draws the Islet app icon (original artwork) and writes Assets/AppIcon.icns.
 // Usage: swift tools/make-icon.swift   (needs iconutil, part of macOS)
 import AppKit
 

@@ -51,7 +51,7 @@ enum Installer {
     /// Copies this app to /Applications (an older copy goes to the Trash), then relaunches from there.
     static func moveToApplications() throws {
         let fm = FileManager.default
-        let dest = URL(fileURLWithPath: "/Applications/MyNotch.app")
+        let dest = URL(fileURLWithPath: "/Applications/Islet.app")
         if fm.fileExists(atPath: dest.path) { try fm.trashItem(at: dest, resultingItemURL: nil) }
         try fm.copyItem(at: Bundle.main.bundleURL, to: dest)
         let relaunch = Process()
@@ -100,7 +100,7 @@ private struct OnboardingView: View {
                 if step.wrappedValue != .welcome {
                     Button("Back") { go(-1) }.keyboardShortcut(.cancelAction)
                 }
-                Button(step.wrappedValue == .finish ? "Start using MyNotch" : "Continue") {
+                Button(step.wrappedValue == .finish ? "Start using Islet" : "Continue") {
                     step.wrappedValue == .finish ? onDone() : go(1)
                 }
                 .keyboardShortcut(.defaultAction)
@@ -126,7 +126,7 @@ private struct OnboardingView: View {
     private var welcome: some View {
         VStack(spacing: 14) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 96, height: 96)
-            Text("Welcome to MyNotch").font(.largeTitle.weight(.semibold))
+            Text("Welcome to Islet").font(.largeTitle.weight(.semibold))
             Text("Mission control for background work").foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 10) {
                 tip("cursorarrow.motionlines", "Move the pointer to the notch to open it.")
@@ -142,10 +142,10 @@ private struct OnboardingView: View {
         VStack(spacing: 14) {
             header("folder.badge.plus", "Install in Applications")
             if Installer.inApplications {
-                Label("MyNotch is in Applications", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.title3)
+                Label("Islet is in Applications", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.title3)
                 Text("All set. Continue to permissions.").foregroundStyle(.secondary)
             } else {
-                Text("MyNotch is running from \(Bundle.main.bundleURL.deletingLastPathComponent().path). Move it to Applications so it keeps working after you eject the disk image, and so Claude Code can find it.")
+                Text("Islet is running from \(Bundle.main.bundleURL.deletingLastPathComponent().path). Move it to Applications so it keeps working after you eject the disk image, and so Claude Code can find it.")
                     .multilineTextAlignment(.center).foregroundStyle(.secondary)
                 Button("Move to Applications and Relaunch") {
                     do { try Installer.moveToApplications() } catch { self.error.wrappedValue = error.localizedDescription }
@@ -158,7 +158,7 @@ private struct OnboardingView: View {
     private var permissions: some View {
         VStack(alignment: .leading, spacing: 14) {
             header("lock.shield", "Permissions").frame(maxWidth: .infinity)
-            permissionRow("Accessibility", "Double-tap Control and keyboard shortcuts. MyNotch reads only the Control key state, never what you type.",
+            permissionRow("Accessibility", "Double-tap Control and keyboard shortcuts. Islet reads only the Control key state, never what you type.",
                           granted: AXIsProcessTrusted()) {
                 AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
@@ -180,13 +180,13 @@ private struct OnboardingView: View {
                 Text("Claude Code isn't installed on this Mac. You can connect it later from Control panel → Agents.")
                     .foregroundStyle(.secondary)
             } else {
-                permissionRow("Agent status hooks", "MyNotch shows each Claude session as running, needs you, done or error. Adds hooks to ~/.claude/settings.json (your settings are kept and backed up).",
+                permissionRow("Agent status hooks", "Islet shows each Claude session as running, needs you, done or error. Adds hooks to ~/.claude/settings.json (your settings are kept and backed up).",
                               granted: ClaudeHooks.isInstalled, action: "Connect") {
                     do { try ClaudeHooks.install() } catch { self.error.wrappedValue = error.localizedDescription }
                     tick.wrappedValue += 1
                 }
             }
-            permissionRow("`notch` command", "Run `notch run npm test` in any terminal to watch long tasks in the notch.",
+            permissionRow("`islet` command", "Run `islet run npm test` in any terminal to watch long tasks in the notch.",
                           granted: CLIInstaller.isInstalled, action: "Install") {
                 do { try CLIInstaller.install() } catch { self.error.wrappedValue = error.localizedDescription }
                 tick.wrappedValue += 1
@@ -198,7 +198,7 @@ private struct OnboardingView: View {
     private var finish: some View {
         VStack(spacing: 14) {
             header("checkmark.seal.fill", "You're set")
-            Toggle("Open MyNotch at login", isOn: Binding(
+            Toggle("Open Islet at login", isOn: Binding(
                 get: { _ = tick.wrappedValue; return SMAppService.mainApp.status == .enabled },
                 set: { on in try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister(); tick.wrappedValue += 1 }))
             .toggleStyle(.switch)

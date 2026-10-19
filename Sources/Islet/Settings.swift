@@ -20,7 +20,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 480),
                              styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
                              backing: .buffered, defer: false)
-            w.title = "MyNotch"
+            w.title = "Islet"
             w.titlebarAppearsTransparent = true
             w.isReleasedWhenClosed = false
             w.delegate = self
@@ -107,6 +107,7 @@ private struct GeneralPage: View {
                 })
                 Toggle("Play sounds (agent needs you, task done, timer)", isOn: bind({ prefs.sounds }) { prefs.sounds = $0 })
                 Toggle("Haptic tap on open and alerts (Force Touch trackpad)", isOn: bind({ prefs.haptics }) { prefs.haptics = $0 })
+                Toggle("Keep the Mac awake while agents or tasks run", isOn: bind({ prefs.keepAwake }) { prefs.keepAwake = $0 })
                 Toggle("Put finished downloads on the File Shelf", isOn: bind({ prefs.autoShelf }) { prefs.autoShelf = $0 })
             }
             Section {
@@ -121,7 +122,7 @@ private struct GeneralPage: View {
                     }
                 }
             } footer: {
-                Text("Needed only for the Control hotkey. MyNotch reads the Control key state, never what you type.")
+                Text("Needed only for the Control hotkey. Islet reads the Control key state, never what you type.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Keyboard (after double-tapping Control)") {
@@ -278,18 +279,18 @@ private struct AgentsPage: View {
             } header: {
                 Text("Agent status")
             } footer: {
-                Text("Adds MyNotch hooks for SessionStart, UserPromptSubmit, Pre/PostToolUse, Notification, Stop and SessionEnd to ~/.claude/settings.json. Your other settings are kept, and the original is backed up to settings.json.mynotch-backup. New Claude sessions pick it up.")
+                Text("Adds Islet hooks for SessionStart, UserPromptSubmit, Pre/PostToolUse, Notification, Stop and SessionEnd to ~/.claude/settings.json. Your other settings are kept, and the original is backed up to settings.json.mynotch-backup. New Claude sessions pick it up.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                LabeledContent("`notch` command") {
+                LabeledContent("`islet` command") {
                     if CLIInstaller.isInstalled {
-                        Label("~/.local/bin/notch", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label("~/.local/bin/islet", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     } else {
                         Button("Install") { run(CLIInstaller.install) }
                     }
                 }
-                Text("notch run npm test        # watch any long task\nnotch agent waiting --name Cursor   # report from any tool")
+                Text("islet run npm test        # watch any long task\nislet agent waiting --name Cursor   # report from any tool")
                     .font(.system(size: 11, design: .monospaced)).textSelection(.enabled).foregroundStyle(.secondary)
             } header: {
                 Text("Long tasks & other agents")
@@ -316,11 +317,11 @@ private struct AgentsPage: View {
     }
 }
 
-/// Installs/removes MyNotch hooks in ~/.claude/settings.json without touching anything else.
+/// Installs/removes Islet hooks in ~/.claude/settings.json without touching anything else.
 enum ClaudeHooks {
     static let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
     static let file = dir.appendingPathComponent("settings.json")
-    static var cliPath: String { Bundle.main.bundlePath + "/Contents/MacOS/notch" }
+    static var cliPath: String { Bundle.main.bundlePath + "/Contents/Helpers/islet" }
     static var command: String { "'\(cliPath)' hook claude" }
     static let events = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "SessionEnd"]
 
@@ -362,7 +363,8 @@ enum ClaudeHooks {
 
     private static func isOurs(_ entry: [String: Any]) -> Bool {
         ((entry["hooks"] as? [[String: Any]]) ?? []).contains {
-            (($0["command"] as? String) ?? "").contains("notch") && (($0["command"] as? String) ?? "").contains("hook claude")
+            let c = ($0["command"] as? String) ?? ""
+            return c.contains("hook claude") && (c.contains("/Helpers/islet") || c.contains("/MacOS/notch"))
         }
     }
 
@@ -378,9 +380,9 @@ enum ClaudeHooks {
     }
 }
 
-/// `notch` on your PATH via a symlink in ~/.local/bin (where Claude Code installs itself too).
+/// `islet` on your PATH via a symlink in ~/.local/bin (where Claude Code installs itself too).
 enum CLIInstaller {
-    static let link = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/notch")
+    static let link = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/islet")
 
     static var isInstalled: Bool {
         (try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) == ClaudeHooks.cliPath
@@ -392,9 +394,14 @@ enum CLIInstaller {
         if (try? fm.destinationOfSymbolicLink(atPath: link.path)) != nil {
             try fm.removeItem(at: link)  // our old link (e.g. app moved)
         } else if fm.fileExists(atPath: link.path) {
-            throw NSError(domain: "MyNotch", code: 1, userInfo: [NSLocalizedDescriptionKey: "~/.local/bin/notch already exists and isn't a MyNotch link; left it alone."])
+            throw NSError(domain: "Islet", code: 1, userInfo: [NSLocalizedDescriptionKey: "~/.local/bin/islet already exists and isn't a Islet link; left it alone."])
         }
         try fm.createSymbolicLink(atPath: link.path, withDestinationPath: ClaudeHooks.cliPath)
+        // Old name: remove ~/.local/bin/notch if it's our link from before the rename.
+        let old = link.deletingLastPathComponent().appendingPathComponent("notch")
+        if let dest = try? fm.destinationOfSymbolicLink(atPath: old.path), dest.hasSuffix("/Contents/MacOS/notch") {
+            try? fm.removeItem(at: old)
+        }
     }
 }
 
@@ -405,7 +412,7 @@ private struct AboutPage: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 96, height: 96)
-            Text("MyNotch").font(.title2.weight(.semibold))
+            Text("Islet").font(.title2.weight(.semibold))
             Text("Mission control for background work").foregroundStyle(.secondary)
             Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")")
                 .font(.caption).foregroundStyle(.secondary)

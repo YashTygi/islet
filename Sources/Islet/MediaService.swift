@@ -281,9 +281,9 @@ private final class LineReader: @unchecked Sendable {
     }
 }
 
-private let debugEnabled = ProcessInfo.processInfo.environment["MYNOTCH_DEBUG"] != nil
+private let debugEnabled = ProcessInfo.processInfo.environment["ISLET_DEBUG"] != nil
 
-/// Opt-in diagnostics: run the binary with MYNOTCH_DEBUG=1 to log to stderr.
+/// Opt-in diagnostics: run the binary with ISLET_DEBUG=1 to log to stderr.
 func debugLog(_ message: @autoclosure () -> String) {
     guard debugEnabled else { return }
     FileHandle.standardError.write(Data((message() + "\n").utf8))

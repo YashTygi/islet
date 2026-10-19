@@ -1,8 +1,8 @@
 #!/bin/bash
-# Memory check: footprint before/after N hover expand/collapse cycles on the running MyNotch.
+# Memory check: footprint before/after N hover expand/collapse cycles on the running Islet.
 # Usage: ./soak.sh [cycles]   (moves the mouse cursor; restores it afterwards)
 set -euo pipefail
-P=$(pgrep -x MyNotch) || { echo "MyNotch not running (./build.sh run)"; exit 1; }
+P=$(pgrep -x Islet) || { echo "Islet not running (./build.sh run)"; exit 1; }
 fp() { footprint -p "$P" | awk '/phys_footprint:/{print $2, $3}'; }
 echo "before: $(fp)"
 swift - "${1:-40}" <<'SWIFT' 2>/dev/null

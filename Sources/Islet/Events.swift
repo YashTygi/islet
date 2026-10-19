@@ -1,13 +1,13 @@
 import AppKit
 import SwiftUI
 
-// MARK: Event bus (fed by the `notch` CLI and agent hooks)
+// MARK: Event bus (fed by the `islet` CLI and agent hooks)
 
-/// Listens for `com.yashtyagi.MyNotch.event` distributed notifications. Zero cost when idle:
+/// Listens for `com.yashtyagi.Islet.event` distributed notifications. Zero cost when idle:
 /// no polling, no sockets, no files. Payloads are capped so a misbehaving sender can't bloat memory.
 @MainActor
 final class EventBus {
-    static let name = Notification.Name("com.yashtyagi.MyNotch.event")
+    static let name = Notification.Name("com.yashtyagi.Islet.event")
     var onAgent: ([String: String]) -> Void = { _ in }
     var onTask: ([String: String]) -> Void = { _ in }
     var onSettings: () -> Void = {}
@@ -142,7 +142,7 @@ final class AgentStore {
     }
 }
 
-// MARK: Long tasks (`notch run …`)
+// MARK: Long tasks (`islet run …`)
 
 struct RunningTask: Identifiable, Equatable {
     let id: String
@@ -230,7 +230,7 @@ struct WorkView: View {
                 ForEach(agents.agents) { a in AgentRow(agent: a, dismiss: { agents.dismiss(a.id) }) }
             }
             column("Tasks", symbol: "terminal", clear: clearTasks) {
-                if tasks.running.isEmpty && tasks.finished.isEmpty && downloads.items.isEmpty { hint("Prefix a command with `notch run` to watch it here") }
+                if tasks.running.isEmpty && tasks.finished.isEmpty && downloads.items.isEmpty { hint("Prefix a command with `islet run` to watch it here") }
                 ForEach(downloads.items) { d in
                     row(symbol: d.airDrop ? "dot.radiowaves.left.and.right" : "arrow.down.circle", color: .blue,
                         title: d.name, subtitle: d.airDrop ? "AirDrop" : "Downloading", app: "") {

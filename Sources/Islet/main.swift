@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         signal(SIGTERM, SIG_IGN)
         termSource.setEventHandler { NSApp.terminate(nil) }
         termSource.resume()
-        if ProcessInfo.processInfo.environment["MYNOTCH_SELFTEST"] != nil {
+        if ProcessInfo.processInfo.environment["ISLET_SELFTEST"] != nil {
             DoubleTapDetector.selfTest()
             exit(0)
         }
@@ -64,15 +64,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         power.start()
         bluetooth.start()
         // Fresh install: permissions are asked step by step in onboarding, not all at launch.
-        let firstRun = !OnboardingWindow.done || ProcessInfo.processInfo.environment["MYNOTCH_ONBOARDING"] != nil
+        let firstRun = !OnboardingWindow.done || ProcessInfo.processInfo.environment["ISLET_ONBOARDING"] != nil
         if !firstRun { calendar.start() }
-        if let port = ProcessInfo.processInfo.environment["MYNOTCH_TEST_TUNNEL"].flatMap(Int.init) {
+        if let port = ProcessInfo.processInfo.environment["ISLET_TEST_TUNNEL"].flatMap(Int.init) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.services.tunnel.start(port: port) }  // dev hook
         }
-        if let f = ProcessInfo.processInfo.environment["MYNOTCH_TEST_AIRDROP"] {
+        if let f = ProcessInfo.processInfo.environment["ISLET_TEST_AIRDROP"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { AirDrop.send([URL(fileURLWithPath: f)]) }  // dev hook
         }
-        if let m = ProcessInfo.processInfo.environment["MYNOTCH_TEST_TIMER"].flatMap(Double.init) {
+        if let m = ProcessInfo.processInfo.environment["ISLET_TEST_TIMER"].flatMap(Double.init) {
             activities.startTimer(minutes: m)  // dev hook: exercise the timer pill without clicking
         }
         rebuild()
@@ -138,6 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         activities.disabled = p.disabledActivities
         activities.sounds = p.sounds
         activities.haptics = p.haptics
+        activities.keepAwakeEnabled = p.keepAwake
         services.downloads.autoShelf = p.autoShelf
     }
 
@@ -159,6 +160,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// One-time move of settings and data from the old "MyNotch" name (runs before any store loads).
+func migrateFromMyNotch() {
+    let d = UserDefaults.standard
+    guard !d.bool(forKey: "migratedFromMyNotch") else { return }
+    if let old = UserDefaults(suiteName: "com.yashtyagi.MyNotch")?.persistentDomain(forName: "com.yashtyagi.MyNotch") {
+        for (k, v) in old where d.object(forKey: k) == nil { d.set(v, forKey: k) }
+    }
+    let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    let from = support.appendingPathComponent("MyNotch"), to = support.appendingPathComponent("Islet")
+    if FileManager.default.fileExists(atPath: from.path), !FileManager.default.fileExists(atPath: to.path) {
+        try? FileManager.default.moveItem(at: from, to: to)
+    }
+    d.set(true, forKey: "migratedFromMyNotch")
+}
+
+migrateFromMyNotch()
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

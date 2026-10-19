@@ -33,7 +33,7 @@ struct DoubleTapDetector {
         lastTapAt = nil
     }
 
-    /// Run with MYNOTCH_SELFTEST=1.
+    /// Run with ISLET_SELFTEST=1.
     static func selfTest() {
         var d = DoubleTapDetector()
         // Clean double tap.
