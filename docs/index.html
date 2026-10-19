@@ -3,283 +3,730 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Islet: the notch for developers</title>
-<meta name="description" content="Islet is a free, source-available macOS notch app for developers. It watches your AI agents and long tasks, and adapts to the app you're in. About 25 MB of RAM, no account.">
-<meta property="og:title" content="Islet: the notch for developers">
+<title>Islet: run your Mac from the notch</title>
+<meta name="description" content="Islet is a free, source-available macOS notch app for developers. It watches your AI agents and long tasks, and changes with the app you're in. About 25 MB of RAM, no account.">
+<meta property="og:title" content="Islet: run your Mac from the notch">
 <meta property="og:description" content="Agents that need you, islet run, PRs and CI, and a notch that changes with the app you're in. About 25 MB. No account.">
 <meta property="og:image" content="https://yashtygi.github.io/islet/assets/notch-work.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #07070a; --panel: #111116; --line: #23232c; --text: #ececf1; --muted: #9a9aa8;
-    --accent: #6e66ff; --accent-2: #8f88ff; --orange: #ff9f43; --green: #34c759;
-    --radius: 18px; --max: 1080px;
-  }
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  a { color: var(--accent-2); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  code, pre { font-family: "SF Mono", ui-monospace, Menlo, monospace; }
-  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 20px; }
+:root{
+  --paper:#f7faff; --mist:#eaf2fd; --sky:#d6e6fa; --ink:#0b0e16; --ink-2:#2a3040; --muted:#5d6577;
+  --line:rgba(11,14,22,.11); --line-2:rgba(11,14,22,.18);
+  --signal:#4b45d6; --signal-soft:rgba(75,69,214,.10);
+  --notch:#000; --n-text:#f2f2f5; --n-muted:#8d8d99; --n-chip:#1c1c22;
+  --orange:#ff9f0a; --green:#30d158; --red:#ff453a;
+  --r:14px; --max:1200px;
+  --sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;min-width:320px;font:16px/1.55 var(--sans);color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--signal);outline-offset:3px;border-radius:6px}
+.mono{font-family:var(--mono)}
+.label{font:500 11px/1.3 var(--mono);text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 24px}
+.grid-bg{background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:72px 72px;background-position:center -1px}
 
-  /* top bar */
-  header { position: sticky; top: 0; z-index: 10; backdrop-filter: saturate(160%) blur(14px);
-    background: color-mix(in srgb, var(--bg) 78%, transparent); border-bottom: 1px solid var(--line); }
-  .bar { display: flex; align-items: center; gap: 16px; height: 60px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); }
-  .brand img { width: 28px; height: 28px; border-radius: 7px; }
-  .bar nav { margin-left: auto; display: flex; gap: 22px; font-size: 14px; }
-  .bar nav a { color: var(--muted); }
-  .bar nav a:hover { color: var(--text); text-decoration: none; }
-  @media (max-width: 640px) { .bar nav .hide-sm { display: none; } .eyebrow { font-size: 12px; max-width: 100%; } .hero { padding-top: 48px; } }
+/* ───────── header: the nav lives in a notch ───────── */
+.top{position:sticky;top:0;z-index:50;height:64px;display:grid;grid-template-columns:1fr auto 1fr;align-items:start;padding:0 24px;
+  background:linear-gradient(var(--paper) 55%,rgba(247,250,255,0));pointer-events:none}
+.top>*{pointer-events:auto}
+.brand{display:flex;align-items:center;gap:10px;height:52px;font-weight:700;letter-spacing:-.02em;text-decoration:none}
+.brand img{width:26px;height:26px;border-radius:7px}
+.navnotch{position:relative;justify-self:center;display:flex;align-items:center;gap:4px;height:40px;padding:0 10px;background:var(--notch);
+  border-radius:0 0 18px 18px;transition:height .22s ease}
+.navnotch a{font:500 13px var(--sans);color:var(--n-muted);text-decoration:none;padding:6px 11px;border-radius:9px;transition:color .18s,background .18s}
+.navnotch a:hover{color:#fff;background:var(--n-chip)}
+.navnotch .cam{width:7px;height:7px;border-radius:50%;background:#16161c;box-shadow:inset 0 0 0 1.5px #23232b;margin:0 8px}
+.scrolled .navnotch{height:34px}
+.actions{justify-self:end;display:flex;gap:8px;align-items:center;height:52px}
+.btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--line-2);background:rgba(255,255,255,.75);
+  font:600 14px var(--sans);text-decoration:none;color:var(--ink);transition:transform .18s ease,background .18s,border-color .18s}
+.btn:hover{border-color:var(--ink-2)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn.primary:hover{background:#222839}
+.btn svg{width:16px;height:16px;flex:none}
+.btn.lg{height:48px;padding:0 22px;font-size:15px;border-radius:12px}
+@media (max-width:820px){.navnotch a.opt{display:none}.actions .btn:not(.primary){display:none}}
+@media (max-width:520px){.top{grid-template-columns:auto 1fr auto;gap:10px;padding:0 16px}.navnotch a{display:none}.navnotch{padding:0 22px}.brand span{display:none}}
 
-  /* hero */
-  .hero { text-align: center; padding: 76px 20px 40px; position: relative; overflow: hidden; }
-  .hero::before { content: ""; position: absolute; inset: -40% -10% auto; height: 520px; z-index: -1;
-    background: radial-gradient(closest-side, rgba(110,102,255,.28), transparent 70%); }
-  .eyebrow { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted);
-    border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: var(--panel); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 10px var(--orange); }
-  h1 { font-size: clamp(40px, 7vw, 72px); line-height: 1.04; letter-spacing: -0.03em; margin: 22px 0 14px; }
-  h1 span { background: linear-gradient(90deg, #fff, var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .lede { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 640px; margin: 0 auto 30px; }
-  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: 14px;
-    font-weight: 650; font-size: 16px; border: 1px solid var(--line); color: var(--text); background: var(--panel); }
-  .btn:hover { text-decoration: none; border-color: #3a3a48; }
-  .btn.primary { background: var(--accent); border-color: transparent; color: #fff; box-shadow: 0 8px 30px rgba(110,102,255,.35); }
-  .btn.primary:hover { background: #7d76ff; }
-  .btn svg { width: 18px; height: 18px; }
-  .fine { font-size: 13px; color: var(--muted); margin-top: 14px; }
+/* ───────── hero ───────── */
+.hero{position:relative;padding:56px 0 40px}
+.hero .wrap{display:grid;grid-template-columns:repeat(12,1fr);gap:24px;align-items:start}
+.hero-copy{grid-column:1/8;padding-top:20px}
+.hero-side{grid-column:9/13;align-self:end;padding-bottom:6px}
+.stage-col{grid-column:1/-1;min-width:0;margin-top:40px}
+@media (max-width:1020px){.hero-copy,.hero-side{grid-column:1/-1}.hero-copy{padding-top:6px}.stage-col{margin-top:24px}}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;padding:6px 11px 6px 8px;border:1px solid var(--line-2);border-radius:999px;background:rgba(255,255,255,.7)}
+.eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 0 4px var(--signal-soft)}
+h1{font-size:clamp(46px,6.2vw,84px);line-height:.94;letter-spacing:-.055em;margin:22px 0 20px;font-weight:700}
+h1 em{font-style:normal;position:relative;white-space:nowrap}
+h1 em::after{content:"";position:absolute;left:-2px;right:-2px;bottom:.06em;height:.16em;background:var(--signal);opacity:.18;border-radius:3px}
+.lede{font-size:18px;color:var(--muted);max-width:46ch;margin:0}
+.lede b{color:var(--ink);font-weight:600}
+.cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
+.facts{display:grid;grid-template-columns:repeat(3,auto);gap:28px;justify-content:start}
+.facts b{display:block;font-size:22px;letter-spacing:-.03em;font-weight:700}
+.fine{margin-top:16px}
 
-  /* notch showcase */
-  .showcase { margin: 46px auto 0; max-width: 860px; }
-  .screen { position: relative; border-radius: 22px; padding: 0 0 18px; background: linear-gradient(#1a1a22, #0b0b0f);
-    border: 1px solid var(--line); overflow: hidden; }
-  .menubar { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
-    font-size: 12px; color: #c9c9d3; background: rgba(255,255,255,.04); }
-  .shot { display: block; width: calc(100% - 36px); margin: -30px auto 0; position: relative; }
-  .shot img { width: 100%; height: auto; display: block; transition: opacity .35s ease; }
-  .tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
-  .tab { font: inherit; font-size: 14px; color: var(--muted); background: var(--panel); border: 1px solid var(--line);
-    padding: 8px 14px; border-radius: 999px; cursor: pointer; }
-  .tab[aria-selected="true"] { color: #fff; border-color: var(--accent); background: rgba(110,102,255,.16); }
-  .caption { text-align: center; color: var(--muted); font-size: 14px; min-height: 2.6em; margin: 12px auto 0; max-width: 620px; }
+/* stage = a Mac screen with a working notch */
+.stage{position:relative;max-width:1060px;margin:0 auto;border:1px solid var(--line-2);border-radius:20px;background:rgba(255,255,255,.7);padding:10px;box-shadow:0 30px 80px rgba(52,82,140,.14)}
+.screen{--k:.66;position:relative;aspect-ratio:1710/1112;border-radius:12px;overflow:hidden;background:linear-gradient(160deg,#dfe9f7,#c9d9ef 60%,#b9cde8);isolation:isolate}
+.menubar{position:absolute;inset:0 0 auto;height:calc(38px*var(--k));display:flex;justify-content:space-between;align-items:center;padding:0 calc(22px*var(--k));font:500 calc(14px*var(--k)) var(--sans);color:#1d2433;background:rgba(255,255,255,.42);backdrop-filter:blur(10px);z-index:1}
+.menubar b{margin-right:14px}
+.win{position:absolute;left:9%;right:9%;top:calc(38px*var(--k) + 6%);bottom:-14px;border-radius:calc(14px*var(--k));background:#fff;border:1px solid rgba(0,0,0,.08);box-shadow:0 18px 50px rgba(30,50,90,.18);overflow:hidden}
+.win-bar{height:calc(40px*var(--k));display:flex;align-items:center;gap:calc(8px*var(--k));padding:0 calc(16px*var(--k));border-bottom:1px solid #eef0f4;font:500 calc(14px*var(--k)) var(--sans);color:#556}
+.win-bar i{width:calc(12px*var(--k));height:calc(12px*var(--k));border-radius:50%;background:#e6e7eb}
+.win-bar span{margin-left:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.win-body{padding:calc(22px*var(--k)) calc(26px*var(--k));font:calc(15px*var(--k))/1.85 var(--mono);color:#7a8194}
+.win-body .k{color:var(--signal)} .win-body .s{color:#1c8a4a} .win-body .c{color:#a2a8b6}
+.win-body .ln{display:block;white-space:pre;overflow:hidden;text-overflow:ellipsis}
 
-  /* sections */
-  section { padding: 72px 0; border-top: 1px solid var(--line); }
-  h2 { font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.02em; margin: 0 0 10px; }
-  .sub { color: var(--muted); margin: 0 0 34px; max-width: 640px; }
-  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
-  .card h3 { margin: 10px 0 6px; font-size: 17px; }
-  .card p { margin: 0; color: var(--muted); font-size: 15px; }
-  .ico { font-size: 22px; }
-  .apps { display: grid; gap: 12px; }
-  .app { display: grid; grid-template-columns: 170px 1fr; gap: 18px; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 16px 20px; }
-  .app b { color: #fff; }
-  .app span { color: var(--muted); font-size: 15px; }
-  @media (max-width: 640px) { .app { grid-template-columns: 1fr; gap: 4px; } }
+/* the notch itself */
+.notch{position:absolute;left:50%;top:0;z-index:5;transform:translateX(-50%) scale(var(--k));transform-origin:50% 0;width:220px;height:38px;background:var(--notch);color:var(--n-text);border:0;padding:0;
+  border-radius:0 0 12px 12px;transition:width .5s cubic-bezier(.32,1.28,.5,1),height .5s cubic-bezier(.32,1.28,.5,1),border-radius .5s;cursor:pointer;text-align:left}
+.notch.wing{width:315px}
+.notch.open{width:680px;height:220px;border-radius:0 0 30px 30px;cursor:default}
+.pill{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font:600 13px var(--sans);transition:opacity .2s}
+.notch.open .pill{opacity:0;pointer-events:none}
+.pill .l,.pill .r{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.np{position:absolute;inset:0;padding:14px 18px 16px;opacity:0;visibility:hidden;transition:opacity .22s .12s,visibility 0s .12s;overflow:hidden}
+.notch.open .np{opacity:1;visibility:visible}
+.np-tabs{display:flex;align-items:center;gap:4px;margin-bottom:12px}
+.np-tabs span{width:26px;height:22px;border-radius:7px;display:grid;place-items:center;color:var(--n-muted)}
+.np-tabs span.on{background:var(--n-chip);color:#fff}
+.np-tabs svg{width:14px;height:14px}
+.np-tabs .sp{flex:1}
+.np-h{display:flex;align-items:center;gap:8px;font:600 13px var(--sans);margin-bottom:8px;white-space:nowrap;overflow:hidden}
+.np-h small{font:500 11px var(--mono);color:var(--n-muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chip{font:600 11.5px var(--sans);padding:5px 10px;border-radius:8px;background:var(--n-chip);color:#ececf1;display:inline-flex;align-items:center;gap:6px}
+.chip.hot{background:#2a2550;color:#d9d6ff}
+.row{display:flex;align-items:center;gap:8px;font:500 11.5px var(--sans);color:#d6d6de;padding:3px 0;white-space:nowrap;overflow:hidden}
+.row .m{font-family:var(--mono);color:#fff;overflow:hidden;text-overflow:ellipsis}
+.row .t{margin-left:auto;font:500 11px var(--mono);color:var(--n-muted)}
+.mute{color:var(--n-muted)}
+.ok{color:var(--green)} .bad{color:var(--red)} .warn{color:var(--orange)}
+.dotg{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;flex:none}
+.spin{width:10px;height:10px;border-radius:50%;border:1.5px solid #8a85ff;border-right-color:transparent;display:inline-block;flex:none;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.qrbox{position:absolute;right:18px;top:46px;display:flex;flex-direction:column;align-items:center;gap:6px;font:500 10.5px var(--sans);color:var(--n-muted)}
+.qrbox img{width:96px;height:96px;border-radius:10px;background:#fff;padding:6px;image-rendering:pixelated}
+.crx{width:15px;height:15px;border-radius:50%;flex:none;background:radial-gradient(circle,#4c8bf5 0 26%,#fff 27% 36%,transparent 37%),conic-gradient(from -30deg,#ea4335 0 120deg,#fbbc04 0 240deg,#34a853 0)}
+.si{width:13px;height:13px;flex:none}
+.m2{font-family:var(--mono);font-size:11px}
+.hint{font-size:10.5px;color:#6f6f7b;padding-top:0}
+.lrow{display:flex;align-items:center;gap:6px;margin-top:7px;max-width:calc(100% - 120px)}
+.lrow .lab{width:46px;flex:none;font:500 11px var(--sans);color:var(--n-muted)}
+.lrow .chip{padding:5px 9px}
+.np .row,.np .np-h{max-width:calc(100% - 0px)}
+.hand{display:inline-block}
 
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
-  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; text-align: center; }
-  .stat b { display: block; font-size: 34px; letter-spacing: -0.02em; }
-  .stat span { color: var(--muted); font-size: 14px; }
+/* stage controls */
+.controls{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:14px 6px 4px}
+.seg{display:flex;flex-wrap:wrap;gap:4px;padding:4px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.seg button{border:0;background:transparent;padding:7px 11px;border-radius:9px;font:500 13px var(--sans);color:var(--muted);transition:background .18s,color .18s}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.seg button:hover:not([aria-pressed="true"]){background:var(--mist);color:var(--ink)}
+.replay{display:flex;gap:8px}
+.ghost{height:38px;padding:0 13px;border-radius:10px;border:1px solid var(--line-2);background:#fff;font:600 13px var(--sans);transition:opacity .18s,background .18s}
+.ghost.sig{background:var(--signal);border-color:var(--signal);color:#fff}
+.ghost:disabled{opacity:.4;cursor:not-allowed}
+.states{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 6px 2px;padding:0;list-style:none}
+.states li{display:flex;align-items:center;gap:6px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#9aa1b2;transition:color .2s}
+.states li::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5}
+.states li.on{color:var(--signal)} .states li.on::before{opacity:1;box-shadow:0 0 0 3px var(--signal-soft)}
+.states li.done{color:var(--ink-2)}
+.stage-note{display:flex;justify-content:space-between;gap:12px;margin:10px 6px 2px;flex-wrap:wrap}
+@media (max-width:640px){.qrbox{display:none}.lrow{max-width:100%}.controls{grid-template-columns:1fr}.replay .ghost{flex:1}.win{left:4%;right:4%}}
 
-  pre { background: #0d0d12; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; overflow-x: auto;
-    font-size: 14px; line-height: 1.7; color: #d7d7e0; margin: 0; }
-  .c { color: #6f6f80; }
-  .two { display: grid; gap: 24px; grid-template-columns: 1fr 1fr; align-items: start; }
-  @media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
+/* ───────── sections ───────── */
+section{position:relative;padding:96px 0;border-top:1px solid var(--line);scroll-margin-top:40px}
+.sec-head{display:grid;grid-template-columns:repeat(12,1fr);gap:24px;margin-bottom:40px;align-items:end}
+.sec-head .k{grid-column:1/4}
+.sec-head h2{grid-column:4/10;font-size:clamp(30px,3.8vw,48px);line-height:1.02;letter-spacing:-.045em;margin:0;font-weight:700}
+.sec-head p{grid-column:10/13;margin:0;color:var(--muted);font-size:15px}
+@media (max-width:900px){.sec-head{gap:12px}.sec-head .k,.sec-head h2,.sec-head p{grid-column:1/-1}section{padding:72px 0}}
 
-  ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-  ol.steps li { counter-increment: s; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-    padding: 16px 18px 16px 58px; position: relative; color: var(--muted); }
-  ol.steps li b { color: var(--text); }
-  ol.steps li::before { content: counter(s); position: absolute; left: 16px; top: 15px; width: 28px; height: 28px; border-radius: 50%;
-    background: rgba(110,102,255,.18); color: var(--accent-2); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+/* friction table */
+.fric{border:1px solid var(--line-2);border-radius:var(--r);background:#fff;overflow:hidden}
+.fric-row{display:grid;grid-template-columns:200px 1fr 1fr;border-top:1px solid var(--line)}
+.fric-row:first-child{border-top:0;background:var(--mist)}
+.fric-row>div{padding:16px 20px;font-size:15px}
+.fric-row>div+div{border-left:1px solid var(--line)}
+.fric-row .was{color:var(--muted)}
+.fric-row .now b{font-weight:600}
+kbd{font:600 12px var(--mono);padding:1px 6px;border:1px solid var(--line-2);border-bottom-width:2px;border-radius:5px;background:#fff}
+@media (max-width:760px){.fric-row{grid-template-columns:1fr}.fric-row>div+div{border-left:0;border-top:1px dashed var(--line)}.fric-row:first-child{display:none}
+  .fric-row .was::before{content:"Before · ";font:500 11px var(--mono);text-transform:uppercase}.fric-row .now::before{content:"Islet · ";font:500 11px var(--mono);text-transform:uppercase;color:var(--signal)}}
 
-  kbd { font: 600 13px "SF Mono", ui-monospace, monospace; background: #1b1b23; border: 1px solid #2d2d38; border-bottom-width: 2px;
-    border-radius: 6px; padding: 2px 7px; color: #e6e6ee; }
-  .keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 24px; }
-  .keys div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line); color: var(--muted); }
+/* context tabs */
+.ctx{display:grid;grid-template-columns:repeat(12,1fr);gap:24px}
+.ctx-list{grid-column:1/4;display:flex;flex-direction:column;gap:4px}
+.ctx-list button{display:flex;justify-content:space-between;align-items:center;text-align:left;border:1px solid transparent;background:transparent;border-radius:11px;padding:11px 14px;font:600 15px var(--sans);color:var(--muted);transition:background .18s,color .18s,border-color .18s}
+.ctx-list button span{font:500 11px var(--mono);color:#a0a7b7}
+.ctx-list button[aria-selected="true"]{background:#fff;border-color:var(--line-2);color:var(--ink)}
+.ctx-list button[aria-selected="true"] span{color:var(--signal)}
+.ctx-panels{grid-column:4/13;min-width:0}
+.ctx-panel{display:grid;grid-template-columns:repeat(8,1fr);gap:24px;align-items:start}
+.ctx-panel[hidden]{display:none}
+.ctx-copy{grid-column:1/4}
+.ctx-copy h3{font-size:24px;letter-spacing:-.03em;margin:8px 0 10px}
+.ctx-copy ul{margin:0;padding:0;list-style:none;display:grid;gap:9px}
+.ctx-copy li{position:relative;padding-left:18px;font-size:14.5px;color:var(--ink-2)}
+.ctx-copy li::before{content:"";position:absolute;left:2px;top:8px;width:6px;height:6px;border-radius:2px;background:var(--signal)}
+.ctx-shot{grid-column:4/9;min-width:0;padding:0 14px}
+.mini{position:relative;display:block;background:var(--notch);color:var(--n-text);border-radius:0 0 24px 24px;padding:16px 18px 18px;min-height:212px}
+.ctx-shot img{width:100%;display:block;border-radius:0 0 22px 22px;background:#000}
+.mini-cap{display:flex;justify-content:space-between;margin-top:10px}
+@media (max-width:900px){.ctx-list{grid-column:1/-1;flex-direction:row;overflow-x:auto;padding-bottom:4px}.ctx-list button{white-space:nowrap}.ctx-list button span{display:none}.ctx-panels{grid-column:1/-1}.ctx-copy,.ctx-shot{grid-column:1/-1}}
 
-  .final { text-align: center; }
-  footer { border-top: 1px solid var(--line); padding: 34px 0 50px; color: var(--muted); font-size: 14px; }
-  footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+/* workflow */
+.flow{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line-2);border-radius:var(--r);background:#fff;overflow:hidden}
+.step{padding:22px 20px 24px;border-left:1px solid var(--line);position:relative}
+.step:first-child{border-left:0}
+.step .n{font:500 11px var(--mono);color:var(--signal)}
+.step h4{margin:10px 0 8px;font-size:17px;letter-spacing:-.02em}
+.step p{margin:0;font-size:14px;color:var(--muted)}
+.step .pv{margin-top:16px;height:26px;border-radius:0 0 11px 11px;background:var(--notch);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;font:600 11px var(--sans);white-space:nowrap}
+.flow-note{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;color:var(--muted);font-size:14px}
+.flow-note b{color:var(--ink)}
+@media (max-width:980px){.flow{grid-template-columns:1fr 1fr}.step{border-top:1px solid var(--line)}.step:nth-child(odd){border-left:0}}
+@media (max-width:560px){.flow{grid-template-columns:1fr}.step{border-left:0}}
+
+/* modules */
+.mods{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.mod{grid-column:span 4;border:1px solid var(--line-2);border-radius:var(--r);background:#fff;padding:20px 20px 22px}
+.mod.w{grid-column:span 6}
+.mod .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--mist);color:var(--signal)}
+.mod .ic svg{width:16px;height:16px}
+.mod h4{margin:14px 0 6px;font-size:16px;letter-spacing:-.02em}
+.mod p{margin:0;font-size:14px;color:var(--muted)}
+code{font:500 .88em var(--mono);color:var(--ink);background:var(--mist);padding:1px 5px;border-radius:5px}
+.basics{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:16px 20px;border:1px dashed var(--line-2);border-radius:var(--r);background:rgba(255,255,255,.6)}
+.basics .label{margin-right:6px}
+.tag{font:500 13px var(--sans);padding:5px 11px;border-radius:999px;background:#fff;border:1px solid var(--line)}
+@media (max-width:900px){.mod,.mod.w{grid-column:span 6}}
+@media (max-width:560px){.mod,.mod.w{grid-column:1/-1}}
+
+/* proof */
+.shots{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+.shot{grid-column:span 6;margin:0}
+.shot img{display:block;width:100%;height:auto;border-radius:0 0 22px 22px;background:#000}
+.shot figcaption{display:flex;justify-content:space-between;gap:10px;margin-top:10px;font-size:14px;color:var(--ink-2)}
+@media (max-width:760px){.shot{grid-column:1/-1}}
+.perf{margin-top:28px;display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:stretch}
+.perf table{grid-column:1/8;width:100%;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;font-size:15px}
+.perf th,.perf td{text-align:left;padding:13px 18px;border-top:1px solid var(--line)}
+.perf tr:first-child th,.perf tr:first-child td{border-top:0}
+.perf th{font-weight:500;color:var(--muted)}
+.perf td{font:600 15px var(--mono);text-align:right;white-space:nowrap}
+.perf .how{grid-column:8/13;border:1px solid var(--line-2);border-radius:var(--r);background:var(--mist);padding:20px}
+.perf .how p{margin:8px 0 0;font-size:14px;color:var(--ink-2)}
+@media (max-width:900px){.perf table,.perf .how{grid-column:1/-1}}
+
+/* pricing */
+.price{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:start}
+.plan{grid-column:1/5;border:1px solid var(--ink);border-radius:var(--r);background:#fff;padding:24px;display:flex;flex-direction:column}
+.plan .amt{font-size:56px;letter-spacing:-.05em;font-weight:700;line-height:1;margin:14px 0 4px}
+.plan ul{list-style:none;padding:0;margin:18px 0 22px;display:grid;gap:8px;font-size:14.5px}
+.plan li::before{content:"✓ ";color:var(--signal);font-weight:700}
+.plan .btn{justify-content:center}
+.cmp{grid-column:5/13;width:100%;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;font-size:14.5px}
+.cmp th,.cmp td{padding:12px 16px;border-top:1px solid var(--line);text-align:left;vertical-align:top}
+.cmp tbody th{font-weight:600;white-space:nowrap}
+.cmp thead th{border-top:0;background:var(--mist);font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.cmp td a{color:var(--signal);text-decoration:none;font:500 12px var(--mono);white-space:nowrap}
+.cmp td a:hover{text-decoration:underline}
+@media (max-width:900px){.plan,.cmp{grid-column:1/-1}}
+@media (max-width:560px){.cmp thead{display:none}.cmp tr{display:grid;grid-template-columns:1fr auto;border-top:1px solid var(--line)}.cmp tbody tr:first-child{border-top:0}.cmp th,.cmp td{border-top:0;padding:8px 14px}.cmp td:nth-child(2){grid-column:1/-1;grid-row:2;padding-top:0;color:var(--ink-2)}.cmp td:last-child{grid-row:1;grid-column:2}}
+
+/* faq */
+.faq{display:grid;grid-template-columns:repeat(12,1fr);gap:24px}
+.faq-head{grid-column:1/4}
+.faq-list{grid-column:4/13;border-top:1px solid var(--line-2)}
+.faq details{border-bottom:1px solid var(--line-2);scroll-margin-top:90px}
+.faq summary{list-style:none;display:flex;justify-content:space-between;gap:16px;padding:18px 2px;font-weight:600;font-size:16.5px;cursor:pointer}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font:500 20px var(--mono);color:var(--muted);transition:transform .2s}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq details p{margin:0 0 18px;color:var(--ink-2);max-width:70ch;font-size:15px}
+.faq details:target summary{color:var(--signal)}
+@media (max-width:900px){.faq-head,.faq-list{grid-column:1/-1}}
+
+/* final + footer */
+.final{text-align:center;padding:110px 0 90px;background:linear-gradient(var(--paper),var(--mist) 60%,var(--sky));border-top:1px solid var(--line)}
+.final h2{font-size:clamp(36px,5vw,64px);letter-spacing:-.05em;line-height:1;margin:22px auto 14px;max-width:16ch}
+.final p{color:var(--muted);margin:0 auto 28px;max-width:46ch}
+.final .cta{justify-content:center}
+.bignotch{width:220px;height:34px;margin:0 auto;background:var(--notch);border-radius:0 0 16px 16px;position:relative;display:flex;align-items:center;justify-content:space-between;padding:0 16px;color:#fff;font:600 12px var(--sans)}
+footer{background:var(--sky);padding:30px 0 40px;font-size:14px;color:var(--ink-2)}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between}
+footer nav{display:flex;flex-wrap:wrap;gap:18px}
+footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink)}
+
+/* motion: reveal targets start hidden only once GSAP is running */
+.js .rv{opacity:0;transform:translateY(14px)}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .js .rv{opacity:1;transform:none}
+  .notch,.np,.pill,.navnotch{transition:none!important}
+  .spin{animation:none}
+}
 </style>
 </head>
 <body>
 
-<header>
-  <div class="wrap bar">
-    <a class="brand" href="#"><img src="assets/icon-256.png" alt="">Islet</a>
-    <nav>
-      <a href="#features" class="hide-sm">Features</a>
-      <a href="#apps" class="hide-sm">Context</a>
-      <a href="#install">Install</a>
-      <a href="https://github.com/YashTygi/islet">GitHub</a>
-    </nav>
+<header class="top">
+  <a class="brand" href="#hero"><img src="assets/icon-256.png" alt=""><span>Islet</span></a>
+  <nav class="navnotch" aria-label="Primary">
+    <a href="#context">Context</a>
+    <a href="#flow" class="opt">How it works</a>
+    <span class="cam" aria-hidden="true"></span>
+    <a href="#proof" class="opt">Proof</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <div class="actions">
+    <a class="btn" href="https://github.com/YashTygi/islet">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.3 4.8 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"/></svg>
+      GitHub
+    </a>
+    <a class="btn primary" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download</a>
   </div>
 </header>
 
 <main>
-  <div class="wrap hero">
-    <div class="eyebrow"><span class="dot"></span> Claude Code · web · Approve: run database migration?</div>
-    <h1><span>The notch for developers.</span></h1>
-    <p class="lede">Islet watches your AI agents and long tasks, and changes with the app you're in. Everything a notch app does, plus the things you actually wait on.</p>
-    <div class="cta">
-      <a class="btn primary" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.9-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.3.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.8-1-2.8-4.1zM14 5.2c.7-.8 1.2-2 1-3.2-1 .1-2.2.7-3 1.5-.6.7-1.2 1.9-1 3.1 1.1.1 2.3-.6 3-1.4z"/></svg>
-        Download for Mac
-      </a>
-      <a class="btn" href="https://github.com/YashTygi/islet">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.3 4.8 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"/></svg>
-        Star on GitHub
-      </a>
+<!-- ───────── HERO ───────── -->
+<div class="hero grid-bg" id="hero">
+  <div class="wrap">
+    <div class="hero-copy">
+      <span class="eyebrow rv"><i></i><span class="label" style="color:var(--ink-2)">macOS notch app · for developers</span></span>
+      <h1 class="rv">Run your Mac from the <em>notch.</em></h1>
+      <p class="lede rv">Agents stop to ask for approval. Builds finish in another window. PRs sit on CI. <b>Islet puts all of it in the notch</b>, and turns into the right tools for whatever app you're in.</p>
+      <div class="cta rv">
+        <a class="btn primary lg" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.9-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.3.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.8-1-2.8-4.1zM14 5.2c.7-.8 1.2-2 1-3.2-1 .1-2.2.7-3 1.5-.6.7-1.2 1.9-1 3.1 1.1.1 2.3-.6 3-1.4z"/></svg>
+          Download for Mac
+        </a>
+        <a class="btn lg" href="#stage" id="try">Try the notch ↓</a>
+      </div>
     </div>
-    <p class="fine">Free &amp; source-available · Apple silicon · macOS 14+ · ~3 MB · No account</p>
 
-    <div class="showcase">
-      <div class="screen">
-        <div class="menubar"><span>&#63743;&nbsp;&nbsp;Code&nbsp;&nbsp;File&nbsp;&nbsp;Edit</span><span>Tue 9:41</span></div>
-        <div class="shot"><img id="shot" src="assets/notch-work.png" alt="Islet's Agents & Tasks tab" width="1360" height="440"></div>
+    <div class="hero-side">
+      <div class="facts rv">
+        <span><b>~25 MB</b><span class="label">RAM in use</span></span>
+        <span><b>0 %</b><span class="label">CPU when idle</span></span>
+        <span><b>0</b><span class="label">accounts</span></span>
       </div>
-      <div class="tabs" role="tablist" aria-label="Islet tabs">
-        <button class="tab" role="tab" aria-selected="true" data-img="notch-work.png" data-cap="Agents &amp; Tasks: who needs you, what's running, what just finished.">Agents</button>
-        <button class="tab" role="tab" aria-selected="false" data-img="notch-app.png" data-cap="In Chrome on localhost: a phone link + QR, or a public link with one click.">App tab</button>
-        <button class="tab" role="tab" aria-selected="false" data-img="notch-dev.png" data-cap="Dev: listening ports with open/kill, your PRs with CI and review status.">Dev</button>
-        <button class="tab" role="tab" aria-selected="false" data-img="notch-home.png" data-cap="Home: now playing, next meeting with Join, Claude usage.">Home</button>
+      <p class="label fine rv">Free · source-available · Apple silicon · macOS 14+</p>
+    </div>
+
+    <div class="stage-col rv">
+      <div class="stage" id="stage">
+        <div class="screen">
+          <div class="menubar" aria-hidden="true"><span><b></b><b id="mb-app">Code</b>File&nbsp;&nbsp;Edit&nbsp;&nbsp;View</span><span class="mono">Tue 9:41</span></div>
+          <div class="win" id="win" aria-hidden="true">
+            <div class="win-bar"><i></i><i></i><i></i><span id="win-title">page.tsx — web</span></div>
+            <div class="win-body" id="win-body"></div>
+          </div>
+          <button class="notch open" id="notch" aria-expanded="true" aria-label="Islet notch replica. Click to open or close">
+            <span class="pill" id="pill"><span class="l"></span><span class="r"></span></span>
+            <span class="np" id="np"></span>
+          </button>
+        </div>
+
+        <div class="controls">
+          <div class="seg" role="group" aria-label="Front app">
+            <button type="button" aria-pressed="true" data-ctx="code">VS Code</button>
+            <button type="button" aria-pressed="false" data-ctx="chrome">Chrome</button>
+            <button type="button" aria-pressed="false" data-ctx="term">Terminal</button>
+            <button type="button" aria-pressed="false" data-ctx="finder">Finder</button>
+          </div>
+          <div class="replay">
+            <button type="button" class="ghost" id="replay">▶ Replay an agent run</button>
+            <button type="button" class="ghost sig" id="approve" disabled>Approve</button>
+          </div>
+        </div>
+        <ol class="states" id="states" aria-label="Agent run states">
+          <li>Running</li><li>Needs you</li><li>Approved</li><li>Testing</li><li>Done</li>
+        </ol>
+        <div class="stage-note"><span class="label">Interactive replica · sample data</span><span class="label" id="live" aria-live="polite">Front app: VS Code</span></div>
       </div>
-      <p class="caption" id="cap">Agents &amp; Tasks: who needs you, what's running, what just finished.</p>
     </div>
   </div>
+</div>
 
-  <section id="features">
-    <div class="wrap">
-      <h2>Built around what you wait on</h2>
-      <p class="sub">Not another everything-app. Every feature earns its place by helping someone who has work running in the background or is building something right now.</p>
-      <div class="grid">
-        <div class="card"><div class="ico">✋</div><h3>Agents that need you</h3><p>Claude Code and Codex report running, needs you, done or error per project. The notch bounces and chimes; press <kbd>J</kbd> to jump to the right terminal.</p></div>
-        <div class="card"><div class="ico">⏱</div><h3>islet run anything</h3><p><code>islet run npm test</code> shows the task live, chimes at the end, passes the exit code through. Stop or re-run it from the notch.</p></div>
-        <div class="card"><div class="ico">🪄</div><h3>Context-aware</h3><p>The App tab turns into a git panel in VS Code, a sharing tool in Chrome, a task manager in Terminal. It only appears when it can help.</p></div>
-        <div class="card"><div class="ico">🧭</div><h3>Dev glance</h3><p>Listening ports with open and kill. Your open GitHub PRs with CI status and review state.</p></div>
-        <div class="card"><div class="ico">📊</div><h3>Claude usage</h3><p>Tokens in the current 5-hour window and when it resets, with an optional budget bar.</p></div>
-        <div class="card"><div class="ico">☕</div><h3>Stays awake for you</h3><p>Keeps the display awake while agents or tasks run, then lets it sleep.</p></div>
-      </div>
-      <p class="sub" style="margin:28px 0 0">And yes, the basics too: now playing, next meeting with one-click Join, timer and Pomodoro, File Shelf with AirDrop, battery and Bluetooth alerts, mic and camera dots with All Mute.</p>
+<!-- ───────── FRICTION ───────── -->
+<section id="why">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="label k">01 · The friction</span>
+      <h2>Background work keeps pulling you out of focus.</h2>
+      <p>Every row is something Islet does today. No made-up time savings, just the steps it removes.</p>
     </div>
-  </section>
-
-  <section id="apps">
-    <div class="wrap">
-      <h2>It changes with the app you're in</h2>
-      <p class="sub">Open the notch over a different app and you get different tools.</p>
-      <div class="apps">
-        <div class="app"><b>VS Code / Cursor</b><span>Branch and changes, an AI-written commit message (never commits without your click), stash dashboard, undo commit, a git guide filled in with your repo's names, run tests, this project's dev servers.</span></div>
-        <div class="app"><b>Chrome / Brave / Safari</b><span>localhost → phone QR, Share publicly with a live link, window size presets, clean and Markdown links, GitHub PR and issue helpers.</span></div>
-        <div class="app"><b>Terminal</b><span>Live tasks with Stop, recent tasks to copy or re-run, your last 15 commands with secret-looking lines hidden.</span></div>
-        <div class="app"><b>Finder</b><span>Copy absolute or git-relative paths, open Terminal here, images → PDF.</span></div>
-        <div class="app"><b>Preview &amp; Figma</b><span>Drag PDFs onto the notch to merge them. Pick colours from the screen in Figma.</span></div>
-        <div class="app"><b>Any app</b><span>Add your own buttons that run shell commands as tracked tasks.</span></div>
-      </div>
+    <div class="fric rv" role="table" aria-label="Before and with Islet">
+      <div class="fric-row" role="row"><div class="label" role="columnheader">Moment</div><div class="label" role="columnheader">Before</div><div class="label" role="columnheader" style="color:var(--signal)">With Islet</div></div>
+      <div class="fric-row" role="row"><div role="rowheader"><b>Agent wants approval</b></div><div class="was" role="cell">You find out minutes later, after ⌘Tab-ing through windows to check.</div><div class="now" role="cell">The notch shows <b>✋ needs you</b> with a chime. Press <kbd>J</kbd> to jump to that terminal.</div></div>
+      <div class="fric-row" role="row"><div role="rowheader"><b>Tests are running</b></div><div class="was" role="cell">You keep switching back to the terminal to see if it finished.</div><div class="now" role="cell"><code>islet run npm test</code> shows elapsed time, then <b>✓ or ✗</b> with a chime.</div></div>
+      <div class="fric-row" role="row"><div role="rowheader"><b>Show a localhost build</b></div><div class="was" role="cell">Install a tunnel tool, copy a URL, send it over.</div><div class="now" role="cell"><b>Share publicly</b> from the notch: a public link + QR, with a LIVE pill until you stop it.</div></div>
+      <div class="fric-row" role="row"><div role="rowheader"><b>Commit before a break</b></div><div class="was" role="cell">Open the diff, write a message, remember the flags.</div><div class="now" role="cell">An <b>AI-written commit message</b> appears in the notch. Nothing commits without your click.</div></div>
+      <div class="fric-row" role="row"><div role="rowheader"><b>Long agent run</b></div><div class="was" role="cell">The display sleeps and the run stalls.</div><div class="now" role="cell"><b>Keeps the Mac awake</b> while any agent or task runs, then lets it sleep.</div></div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section>
-    <div class="wrap two">
-      <div>
-        <h2>One command for long tasks</h2>
-        <p class="sub">Output stays in your terminal. The notch shows elapsed time, then ✓ or ✗ with a chime. Any tool can report in as an agent.</p>
-      </div>
-<pre><span class="c"># watch anything</span>
-islet run npm test
-islet run swift build -c release
-
-<span class="c"># report from any agent or script</span>
-islet agent waiting --name "My Agent" \
-  --project api --message "Approve deploy?"</pre>
+<!-- ───────── CONTEXT ───────── -->
+<section id="context" class="grid-bg">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="label k">02 · Context-aware</span>
+      <h2>One notch. The right tools for every app.</h2>
+      <p>The App tab appears only when the app in front has something useful to offer. Otherwise it stays out of the way.</p>
     </div>
-  </section>
-
-  <section>
-    <div class="wrap">
-      <h2>Light by design</h2>
-      <p class="sub">Heavy work runs in short-lived helper processes. Nothing polls while the notch is closed.</p>
-      <div class="stats">
-        <div class="stat"><b>~25 MB</b><span>RAM in normal use</span></div>
-        <div class="stat"><b>0 %</b><span>CPU when idle</span></div>
-        <div class="stat"><b>~3 MB</b><span>download</span></div>
-        <div class="stat"><b>0</b><span>accounts, trackers, servers</span></div>
+    <div class="ctx rv">
+      <div class="ctx-list" role="tablist" aria-label="Apps">
+        <button type="button" role="tab" id="t-vscode" aria-controls="ctx-vscode" aria-selected="true">VS Code / Cursor <span>git</span></button>
+        <button type="button" role="tab" id="t-chrome" aria-controls="ctx-chrome" aria-selected="false" tabindex="-1">Chrome · Brave · Safari <span>share</span></button>
+        <button type="button" role="tab" id="t-terminal" aria-controls="ctx-terminal" aria-selected="false" tabindex="-1">Terminal <span>tasks</span></button>
+        <button type="button" role="tab" id="t-finder" aria-controls="ctx-finder" aria-selected="false" tabindex="-1">Finder <span>paths</span></button>
+        <button type="button" role="tab" id="t-more" aria-controls="ctx-more" aria-selected="false" tabindex="-1">Figma · Preview · any app <span>more</span></button>
       </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap">
-      <h2>Keyboard all the way</h2>
-      <p class="sub">Hover the notch, or double-tap Control to open it with keyboard focus.</p>
-      <div class="keys">
-        <div><span>Open / close</span><span><kbd>⌃</kbd> <kbd>⌃</kbd></span></div>
-        <div><span>Switch tabs</span><span><kbd>⌘1</kbd>–<kbd>⌘6</kbd></span></div>
-        <div><span>Jump to waiting agent</span><kbd>J</kbd></div>
-        <div><span>Mute mic everywhere</span><kbd>M</kbd></div>
-        <div><span>Timer / focus</span><kbd>⌘T</kbd></div>
-        <div><span>All shortcuts</span><kbd>?</kbd></div>
+      <div class="ctx-panels">
+        <div class="ctx-panel" role="tabpanel" id="ctx-vscode" aria-labelledby="t-vscode">
+          <div class="ctx-copy"><span class="label">In VS Code or Cursor</span><h3>Your repo, one glance away.</h3><ul>
+            <li>Branch, ahead/behind and changed files</li><li>AI-written commit message, edited and committed by you</li><li>Stash dashboard and undo last commit (warns if pushed)</li><li>"main ↓N · update" with rebase or merge</li><li>A git guide filled in with your repo's names</li><li>Run tests and see this project's dev servers</li></ul></div>
+          <div class="ctx-shot"><div class="mini" data-render="code"></div><div class="mini-cap"><span class="label">Replica · sample data</span></div></div>
+        </div>
+        <div class="ctx-panel" role="tabpanel" id="ctx-chrome" aria-labelledby="t-chrome" hidden>
+          <div class="ctx-copy"><span class="label">In your browser</span><h3>localhost, everywhere.</h3><ul>
+            <li>localhost → phone link + QR on the same Wi-Fi</li><li>Share publicly with a live tunnel link and a LIVE pill</li><li>Window size presets: iPhone, iPad, laptop, desktop</li><li>Clean links and Markdown links</li><li>GitHub helpers: clone, <code>gh pr checkout</code>, issue as task</li></ul></div>
+          <div class="ctx-shot"><img src="assets/notch-app.png" alt="Real screenshot of Islet's App tab in Chrome on localhost: phone link, Share publicly and a QR code" loading="lazy"><div class="mini-cap"><span class="label">Real screenshot · demo page</span></div></div>
+        </div>
+        <div class="ctx-panel" role="tabpanel" id="ctx-terminal" aria-labelledby="t-terminal" hidden>
+          <div class="ctx-copy"><span class="label">In Terminal, iTerm, Ghostty or Warp</span><h3>Every long task, in view.</h3><ul>
+            <li>Live <code>islet run</code> tasks with Stop</li><li>The last 15 finished tasks: copy, or re-run in the same folder</li><li>Your last 15 commands, with secret-looking lines hidden</li></ul></div>
+          <div class="ctx-shot"><div class="mini" data-render="term"></div><div class="mini-cap"><span class="label">Replica · sample data</span></div></div>
+        </div>
+        <div class="ctx-panel" role="tabpanel" id="ctx-finder" aria-labelledby="t-finder" hidden>
+          <div class="ctx-copy"><span class="label">In Finder (with a window open)</span><h3>Paths without the fiddling.</h3><ul>
+            <li>Copy the absolute path, or the path relative to the git root</li><li>Open Terminal in this folder</li><li>Selected images → one PDF</li></ul></div>
+          <div class="ctx-shot"><div class="mini" data-render="finder"></div><div class="mini-cap"><span class="label">Replica · sample data</span></div></div>
+        </div>
+        <div class="ctx-panel" role="tabpanel" id="ctx-more" aria-labelledby="t-more" hidden>
+          <div class="ctx-copy"><span class="label">And the rest</span><h3>Small tools where they belong.</h3><ul>
+            <li><b>Figma:</b> screen eyedropper with colour history</li><li><b>Preview:</b> drag PDFs onto the notch to merge them</li><li><b>Claude desktop:</b> usage and all your agents</li><li><b>Any app:</b> your own buttons that run shell commands</li></ul></div>
+          <div class="ctx-shot"><div class="mini" data-render="more"></div><div class="mini-cap"><span class="label">Replica · sample data</span></div></div>
+        </div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section id="install">
-    <div class="wrap two">
-      <div>
-        <h2>Install in a minute</h2>
-        <p class="sub">Islet isn't notarized yet, so macOS asks you to confirm it once.</p>
-        <a class="btn primary" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download Islet.dmg</a>
-        <p class="fine" style="text-align:left">Requires a Mac with Apple silicon (M1 or later) and macOS 14 Sonoma or later. <a href="https://github.com/YashTygi/islet#build-from-source">Build from source</a>.</p>
-      </div>
-      <ol class="steps">
-        <li><b>Open the DMG</b> and drag Islet to Applications.</li>
-        <li><b>Open Islet.</b> If macOS blocks it: System Settings → Privacy &amp; Security → <b>Open Anyway</b>.</li>
-        <li><b>Follow setup:</b> Accessibility for the shortcut, connect Claude Code, install the <code>islet</code> command, and optionally sign in to GitHub.</li>
-        <li><b>Hover the notch.</b> That's it.</li>
-      </ol>
+<!-- ───────── FLOW ───────── -->
+<section id="flow">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="label k">03 · How a run flows</span>
+      <h2>Every state is visible. You stay in control.</h2>
+      <p>Islet reports and brings you to the right window. It never approves, commits or deploys on its own.</p>
     </div>
-  </section>
+    <div class="flow">
+      <div class="step rv"><span class="n">01 · START</span><h4>Something starts</h4><p>A Claude Code or Codex session, or any command via <code>islet run</code>.</p><div class="pv"><span class="spin"></span><span>1 running</span></div></div>
+      <div class="step rv"><span class="n">02 · RUNNING</span><h4>It's in the pill</h4><p>Elapsed time and project at a glance. The Mac stays awake.</p><div class="pv"><span>npm test</span><span class="mono">0:12 ☕</span></div></div>
+      <div class="step rv"><span class="n">03 · NEEDS YOU</span><h4>It asks, you decide</h4><p>✋ and a chime. Click the pill or press <kbd>J</kbd> to jump to the terminal that's waiting.</p><div class="pv"><span class="warn">✋ web</span><span class="warn">1</span></div></div>
+      <div class="step rv"><span class="n">04 · DONE</span><h4>It tells you how it went</h4><p>✓ or ✗ with the exit code passed through, plus a chime.</p><div class="pv"><span class="ok">✓ done</span><span class="mono">0:41</span></div></div>
+      <div class="step rv"><span class="n">05 · RESULTS</span><h4>Files land on the Shelf</h4><p>Downloads and file outputs collect on the File Shelf, ready to drag or AirDrop.</p><div class="pv"><span>Shelf</span><span>3 items</span></div></div>
+    </div>
+    <p class="flow-note rv"><span class="label">Works with</span><b>Claude Code</b> and <b>Codex</b> built in, and anything else via <code>islet agent waiting --project api</code></p>
+  </div>
+</section>
 
-  <section class="final">
-    <div class="wrap">
-      <h2>Your notch, finally working for you.</h2>
-      <p class="sub" style="margin:0 auto 26px">Free, source-available and private. Runs entirely on your Mac.</p>
-      <div class="cta">
-        <a class="btn primary" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download for Mac</a>
-        <a class="btn" href="https://github.com/YashTygi/islet">View source</a>
+<!-- ───────── MODULES ───────── -->
+<section id="features" class="grid-bg">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="label k">04 · What's inside</span>
+      <h2>Built around what you wait on.</h2>
+      <p>Every module can be switched off. Nothing runs while it's hidden.</p>
+    </div>
+    <div class="mods">
+      <div class="mod w"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1.5v-6a1.5 1.5 0 0 1 3 0V12m0-5.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-12.6 4.2L3 15.6a1.5 1.5 0 0 1 2.3-2L8 16"/></svg></span><h4>Agents that need you</h4><p>Running, needs you, done or error, per project. Needs-you bounces once with a chime; <code>J</code> jumps to the window.</p></div>
+      <div class="mod w"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m5 8 4 4-4 4M12 17h7"/></svg></span><h4><code>islet run</code> anything</h4><p>Builds, tests, deploys. Output stays in your terminal and the exit code passes through, so it works in scripts.</p></div>
+      <div class="mod"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v7M18 15.5V9a3 3 0 0 0-3-3h-4"/></svg></span><h4>PRs & CI</h4><p>Your open GitHub PRs with CI status and review state. Setup and sign-in happen inside the app.</p></div>
+      <div class="mod"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><h4>Ports</h4><p>Every listening server with its process. Open it in the browser or stop it in two clicks.</p></div>
+      <div class="mod"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"/></svg></span><h4>Claude usage</h4><p>Tokens in the current 5-hour window and when it resets, with an optional budget bar.</p></div>
+      <div class="mod"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 8h1a3 3 0 0 1 0 6h-1M3 8h14v6a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5zM7 2v3m4-3v3"/></svg></span><h4>Keep awake</h4><p>Holds the display awake while agents or tasks run, and releases it when they're done.</p></div>
+      <div class="mod"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zM19 11a7 7 0 0 1-14 0M12 18v3M4 4l16 16"/></svg></span><h4>All Mute</h4><p>Green and orange dots when the camera or mic is in use. <code>M</code> mutes the mic in every app.</p></div>
+      <div class="mod"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 12a2 2 0 1 0 0-.01M18 6a2 2 0 1 0 0-.01M18 18a2 2 0 1 0 0-.01M8 11l8-4M8 13l8 4"/></svg></span><h4>Share publicly</h4><p>A Cloudflare or localhost.run tunnel for any local port, with QR and a LIVE pill.</p></div>
+      <div class="mod"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span><h4>Keyboard first</h4><p>Double-tap <code>⌃</code> to open it with focus. <code>⌘1</code>–<code>⌘6</code> for tabs, <code>?</code> for every shortcut.</p></div>
+      <div class="basics"><span class="label">And the basics</span><span class="tag">Now playing</span><span class="tag">Next meeting · Join</span><span class="tag">Timer & Pomodoro</span><span class="tag">File Shelf</span><span class="tag">AirDrop</span><span class="tag">Battery & Bluetooth</span><span class="tag">Camera + ring light (opt-in)</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── PROOF ───────── -->
+<section id="proof">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="label k">05 · Proof</span>
+      <h2>The real app, and the real numbers.</h2>
+      <p>Screenshots straight from Islet, using demo data so no one's private repos are on show.</p>
+    </div>
+    <div class="shots">
+      <figure class="shot rv"><img src="assets/notch-work.png" alt="Agents and Tasks tab: one agent needs approval, one running, one done, plus recent tasks" loading="lazy"><figcaption><b>Agents & Tasks</b><span class="label">Real · demo data</span></figcaption></figure>
+      <figure class="shot rv"><img src="assets/notch-dev.png" alt="Dev tab: listening ports and GitHub pull requests with CI status" loading="lazy"><figcaption><b>Dev: ports, PRs & CI</b><span class="label">Real · demo data</span></figcaption></figure>
+      <figure class="shot rv"><img src="assets/notch-app.png" alt="App tab in Chrome on localhost" loading="lazy"><figcaption><b>App tab in Chrome</b><span class="label">Real · demo page</span></figcaption></figure>
+      <figure class="shot rv"><img src="assets/notch-home.png" alt="Home tab: now playing, next meeting, Claude usage" loading="lazy"><figcaption><b>Home</b><span class="label">Real · demo player</span></figcaption></figure>
+    </div>
+    <div class="perf">
+      <table class="rv" aria-label="Measured performance">
+        <tr><th scope="row">Memory, normal use</th><td>23–29 MB</td></tr>
+        <tr><th scope="row">Memory, peak under stress test</th><td>≤ 35 MB</td></tr>
+        <tr><th scope="row">CPU when idle</th><td>0 %</td></tr>
+        <tr><th scope="row">Background disk writes</th><td>none</td></tr>
+        <tr><th scope="row">Download</th><td>~2.5 MB</td></tr>
+      </table>
+      <div class="how rv"><span class="label">How it stays light</span>
+        <p>Heavy work (log scanning, image and PDF jobs, QR codes, AppleScript) runs in short-lived helper processes that exit when done. Nothing polls while the notch is closed, and there are no continuous animations.</p>
+        <p class="label" style="margin-top:14px">Measured with <a href="https://github.com/YashTygi/islet/blob/main/tools/loadtest.sh" style="color:var(--signal)">tools/loadtest.sh</a> on an Apple-silicon MacBook</p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
+
+<!-- ───────── PRICING ───────── -->
+<section id="pricing" class="grid-bg">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="label k">06 · Pricing</span>
+      <h2>Free. Every feature. No account.</h2>
+      <p>No trial, no tiers, no usage limits. Here's exactly what you get and what you need.</p>
+    </div>
+    <div class="price">
+      <div class="plan rv">
+        <span class="label">Islet 1.0</span>
+        <div class="amt">$0</div>
+        <span class="label">forever · source-available</span>
+        <ul><li>Every feature on this page</li><li>No login, analytics or server</li><li>Read, change and fork the code</li><li>Updates from GitHub Releases</li></ul>
+        <a class="btn primary lg" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download for Mac</a>
+      </div>
+      <table class="cmp rv" aria-label="What's included and what you need">
+        <thead><tr><th scope="col">Item</th><th scope="col">Details</th><th scope="col"><span class="sr-only" style="position:absolute;left:-9999px">More</span></th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Mac</th><td>Apple silicon (M1 or later), macOS 14 Sonoma or later. Works on screens without a notch too.</td><td><a href="#q-notch">No notch?</a></td></tr>
+          <tr><th scope="row">Agents</th><td>Claude Code and Codex built in. Any other tool via <code>islet agent</code>.</td><td><a href="#q-agents">Which agents?</a></td></tr>
+          <tr><th scope="row">Usage meter</th><td>Claude Code's 5-hour window, read from local logs.</td><td><a href="#q-usage">Why only Claude?</a></td></tr>
+          <tr><th scope="row">PRs & CI</th><td>Uses the GitHub CLI; setup installs it and signs you in.</td><td><a href="#q-github">How?</a></td></tr>
+          <tr><th scope="row">First launch</th><td>One-time "Open Anyway" in System Settings (not notarized yet).</td><td><a href="#q-gatekeeper">Why?</a></td></tr>
+          <tr><th scope="row">License</th><td>Use, modify and fork freely with credit. Selling it isn't allowed.</td><td><a href="#q-license">Details</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── FAQ ───────── -->
+<section id="faq">
+  <div class="wrap faq">
+    <div class="faq-head rv"><span class="label">07 · FAQ</span><h2 style="font-size:clamp(28px,3.4vw,40px);letter-spacing:-.04em;line-height:1.05;margin:14px 0 0">Questions, answered plainly.</h2></div>
+    <div class="faq-list">
+      <details id="q-gatekeeper"><summary>Why does macOS ask me to "Open Anyway"?</summary><p>Islet is signed but not yet notarized by Apple, which needs a paid developer account. The first time you open it, go to System Settings → Privacy &amp; Security and click Open Anyway. You only do this once. The full source is on GitHub if you'd rather build it yourself.</p></details>
+      <details id="q-agents"><summary>Which AI agents does it support?</summary><p>Claude Code connects in one click during setup, and Codex via its <code>notify</code> setting. Anything else (Cursor, Gemini CLI, your own scripts) can report with one line, e.g. <code>islet agent waiting --name "My Agent" --project api</code>. Native hooks for more agents are on the roadmap.</p></details>
+      <details id="q-usage"><summary>Why does the usage meter only show Claude?</summary><p>It reads Claude Code's local session logs, so nothing leaves your Mac. Other providers don't keep comparable local logs yet; more meters are on the roadmap.</p></details>
+      <details id="q-github"><summary>How do PRs and CI get into the notch?</summary><p>Islet uses GitHub's own <code>gh</code> CLI. Setup installs it (with Homebrew, or GitHub's installer) and opens a browser sign-in. Your token stays in your Keychain, and Islet never sees it.</p></details>
+      <details id="q-privacy"><summary>What does Islet collect?</summary><p>Nothing. There's no account, analytics or server. The keyboard shortcut reads only the Control key. A public tunnel runs only when you click Share publicly, and shows a LIVE pill the whole time.</p></details>
+      <details id="q-notch"><summary>Does it work on Macs or monitors without a notch?</summary><p>Yes. Screens without a notch get a slim black pill at the top centre that behaves the same way, on every display.</p></details>
+      <details id="q-license"><summary>Is it open source?</summary><p>It's source-available under MIT + Commons Clause. You can use it at home or at work, read and change the code, and fork it with credit. What isn't allowed is selling Islet or a product built mainly from its code.</p></details>
+      <details id="q-uninstall"><summary>How do I uninstall it?</summary><p>Remove the Claude Code hooks in Control panel → Agents, quit Islet, and move it to the Trash. Optionally delete <code>~/Library/Application Support/Islet</code>.</p></details>
+    </div>
+  </div>
+</section>
+
+<div class="final" id="download">
+  <div class="wrap">
+    <div class="bignotch rv" aria-hidden="true"><span class="ok">✓</span><span>ready</span></div>
+    <h2 class="rv">Give your notch a job.</h2>
+    <p class="rv">Free, source-available and private. About 2.5 MB, set up in a minute.</p>
+    <div class="cta rv">
+      <a class="btn primary lg" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download for Mac</a>
+      <a class="btn lg" href="https://github.com/YashTygi/islet">View on GitHub</a>
+    </div>
+    <p class="label" style="margin-top:18px">Apple silicon · macOS 14+</p>
+  </div>
+</div>
 </main>
 
 <footer>
   <div class="wrap">
-    <span>Islet · MIT + Commons Clause · by <a href="https://github.com/YashTygi">Yash Tyagi</a></span>
-    <span><a href="https://github.com/YashTygi/islet/issues">Issues</a> · <a href="https://github.com/YashTygi/islet/releases">Releases</a> · Screenshots use demo data.</span>
+    <span>© 2026 Yash Tyagi · Islet · MIT + Commons Clause</span>
+    <nav aria-label="Footer">
+      <a href="https://github.com/YashTygi/islet#readme">Docs</a>
+      <a href="https://github.com/YashTygi/islet/releases">Releases</a>
+      <a href="https://github.com/YashTygi/islet/issues">Issues</a>
+      <a href="https://github.com/YashTygi/islet/blob/main/LICENSE">License</a>
+      <a href="#q-privacy">Privacy</a>
+    </nav>
   </div>
 </footer>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script>
-  const tabs = document.querySelectorAll('.tab'), shot = document.getElementById('shot'), cap = document.getElementById('cap');
-  tabs.forEach(t => t.addEventListener('click', () => {
-    tabs.forEach(x => x.setAttribute('aria-selected', x === t));
-    shot.style.opacity = 0;
-    setTimeout(() => { shot.src = 'assets/' + t.dataset.img; shot.alt = t.textContent; cap.innerHTML = t.dataset.cap; shot.style.opacity = 1; }, 180);
-  }));
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+  /* ── notch panel content: mirrors the real app's layout, with sample data ── */
+  const ico = {
+    home:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 3 10v10h6v-6h6v6h6V10z"/></svg>',
+    app:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 20 10-10M15 4v3M19 8h-3M18 4l-2 2"/></svg>',
+    ag:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2z"/></svg>',
+    dev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 7-5 5 5 5M15 7l5 5-5 5"/></svg>',
+    tray:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h5l1 3h6l1-3h5M5 5h14l2 8v6H3v-6z"/></svg>'
+  };
+  const tabs = on => `<span class="np-tabs">${['home','app','ag','dev','tray'].map(k => `<span class="${k === on ? 'on' : ''}">${ico[k]}</span>`).join('')}<span class="sp"></span><span class="mono" style="font-size:11px;color:var(--n-muted)">☕</span></span>`;
+  const panels = {
+    code: tabs('app') + `<span class="np-h">acme/web <small>main ↑1 ↓0 · 4 changed</small><small class="warn" style="margin-left:auto">main ↓2 · update</small></span>
+      <span class="chips"><span class="chip hot">✎ Commit</span><span class="chip">Stash · 2</span><span class="chip">Undo commit</span><span class="chip">Guide</span><span class="chip">Terminal</span><span class="chip">▶ Test</span></span>
+      <span class="row"><span class="mute">AI message</span><span class="m">feat(web): hydrate dashboard without layout shift</span></span>
+      <span class="row"><span class="dotg"></span><span class="m">:3000</span> next dev<span class="t">this project</span></span>`,
+    chrome: tabs('app') + `<span class="np-h"><i class="crx"></i>Acme Dashboard</span>
+      <span class="row mute m2">http://localhost:3000/</span>
+      <span class="row"><svg class="si" style="color:var(--green)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg><b class="m">http://192.168.1.20:3000/</b><svg class="si mute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></span>
+      <span class="row hint">Phone can't connect? Start the server on 0.0.0.0 (e.g. --host).</span>
+      <span class="lrow"><span class="lab">Public</span><span class="chip"><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Share publicly</span></span>
+      <span class="lrow"><span class="lab">Size</span><span class="chip">iPhone</span><span class="chip">iPad</span><span class="chip">Laptop</span><span class="chip">Desktop</span></span>
+      <span class="qrbox" aria-hidden="true"><img src="assets/qr-demo.png" alt=""><span>Scan · same Wi-Fi</span></span>`,
+    term: tabs('app') + `<span class="np-h">islet run <small>live</small></span>
+      <span class="row"><span class="spin"></span><span class="m">npm test</span><span class="mute">api-server</span><span class="t">0:07 · Stop</span></span>
+      <span class="row"><span class="ok">✓</span><span class="m">swift build -c release</span><span class="mute">ios</span><span class="t">0:41 ↻</span></span>
+      <span class="row"><span class="bad">✗</span><span class="m">pytest -q</span><span class="mute">exit 1</span><span class="t">1:13 ↻</span></span>
+      <span class="np-h" style="margin:8px 0 2px">Recent commands <small>click to copy</small></span>
+      <span class="row"><span class="m">git rebase main</span></span>`,
+    finder: tabs('app') + `<span class="np-h">page.tsx <small>~/Developer/web/src/app</small></span>
+      <span class="row"><span class="mute">Relative</span><span class="m">src/app/page.tsx</span></span>
+      <span class="chips"><span class="chip hot">Copy relative path</span><span class="chip">Copy path</span><span class="chip">Open Terminal here</span></span>
+      <span class="chips"><span class="chip">3 images → PDF</span></span>`,
+    more: tabs('app') + `<span class="np-h">Figma <small>eyedropper</small></span>
+      <span class="chips"><span class="chip hot">◉ Pick colour</span><span class="chip"><i style="width:10px;height:10px;border-radius:3px;background:#4b45d6;display:inline-block"></i>#4B45D6 copied</span></span>
+      <span class="row"><span class="mute">History</span>${['#ff9f0a','#30d158','#ffffff','#d6e6fa','#ff453a'].map(c => `<i style="width:14px;height:14px;border-radius:4px;background:${c};display:inline-block"></i>`).join('')}</span>
+      <span class="np-h" style="margin-top:8px">Preview <small>drag a PDF onto the notch</small></span>
+      <span class="chips"><span class="chip">Merge into report.pdf</span></span>`,
+    agents: tabs('ag') + `<span class="np-h">Agents <small>sample run finished</small></span>
+      <span class="row" style="padding:5px 8px"><span class="ok">✓</span><b>Claude Code · web</b><span class="mute">Migration applied · tests pass</span></span>
+      <span class="row" style="padding:5px 8px"><span class="spin"></span><b>Claude Code · api-server</b><span class="mute">Editing routes/events.ts</span></span>
+      <span class="row" style="padding:5px 8px"><span class="ok">✓</span><b>Codex · ios</b><span class="mute">Tests pass</span></span>`
+  };
+  const wins = {
+    code:{app:'Code',title:'page.tsx — web',body:['<span class="k">import</span> { Dashboard } <span class="k">from</span> <span class="s">"@/components/dashboard"</span>','<span class="k">import</span> { useStats } <span class="k">from</span> <span class="s">"@/lib/stats"</span>','','<span class="k">export default function</span> Page() {','  <span class="k">const</span> stats = useStats(<span class="s">"/api/events"</span>)','  <span class="c">// hydrate without layout shift</span>','  <span class="k">if</span> (!stats) <span class="k">return</span> &lt;Skeleton rows={6} /&gt;','','  <span class="k">return</span> (','    &lt;Dashboard','      data={stats}','      refresh={<span class="s">30_000</span>}','    /&gt;','  )','}']},
+    chrome:{app:'Chrome',title:'Acme Dashboard — localhost:3000',body:['<span class="c">localhost:3000</span>','','<span style="font:600 22px var(--sans);color:#223">Acme Dashboard</span>','<span class="c">dev build · hot reload on</span>']},
+    term:{app:'Terminal',title:'api-server — zsh',body:['<span class="s">~/api-server</span> $ islet run npm test','','&gt; api-server@2.4.0 test','&gt; vitest run','','<span class="s"> ✓</span> routes/events.test.ts (12 tests) 214ms','<span class="s"> ✓</span> routes/auth.test.ts (8 tests) 97ms','<span class="c"> ⠋ routes/stream.test.ts</span>']},
+    finder:{app:'Finder',title:'app',body:['📁 api','📁 components','📁 dashboard','📄 globals.css','📄 layout.tsx','📄 <b style="color:#223">page.tsx</b>   <span class="c">selected</span>','📄 providers.tsx']}
+  };
+  const names = {code:'VS Code', chrome:'Chrome', term:'Terminal', finder:'Finder'};
+
+  $$('.mini[data-render]').forEach(m => m.innerHTML = panels[m.dataset.render]);
+
+  /* ── hero stage ── */
+  const notch = $('#notch'), np = $('#np'), pill = $('#pill'), live = $('#live');
+  let running = false, timers = [];
+  const setWin = k => { const w = wins[k]; $('#mb-app').textContent = w.app; $('#win-title').textContent = w.title;
+    $('#win-body').innerHTML = w.body.map(l => `<span class="ln">${l || '&nbsp;'}</span>`).join(''); };
+  const fade = (el, fn) => { if (reduce || !window.gsap) return fn(); gsap.to(el, {opacity:0, duration:.16, onComplete(){ fn(); gsap.to(el, {opacity:1, duration:.24}); }}); };
+  const open = v => { notch.classList.toggle('open', v); notch.setAttribute('aria-expanded', v); };
+  const setPill = (l, r, wing) => { pill.querySelector('.l').innerHTML = l; pill.querySelector('.r').innerHTML = r; notch.classList.toggle('wing', !!wing); };
+  const showCtx = k => { fade(np, () => np.innerHTML = panels[k]); fade($('#win'), () => setWin(k)); live.textContent = 'Front app: ' + names[k];
+    $$('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.ctx === k)); };
+
+  const scr = $('.screen');
+  const fit = () => { const w = scr.clientWidth; let k = w / 1710;
+    if (k < .42) { k = .42; scr.style.aspectRatio = 'auto'; scr.style.height = Math.round(w * .78) + 'px'; }  // phones: zoomed crop so text stays legible
+    else { scr.style.aspectRatio = ''; scr.style.height = ''; }
+    scr.style.setProperty('--k', k.toFixed(4)); };
+  new ResizeObserver(fit).observe(scr); fit();
+  setWin('code'); np.innerHTML = panels.code; setPill('', '', false);
+  $$('.seg button').forEach(b => b.addEventListener('click', () => { stop(); showCtx(b.dataset.ctx); setPill('', '', false); open(true); }));
+  notch.addEventListener('click', () => { if (!running) open(!notch.classList.contains('open')); });
+
+  /* deterministic replay: the run waits for *you* at "needs you" */
+  const states = $$('#states li'), approve = $('#approve'), replay = $('#replay');
+  const mark = i => states.forEach((li, j) => { li.classList.toggle('on', j === i); li.classList.toggle('done', i >= 0 && j < i); });
+  const later = (fn, ms) => timers.push(setTimeout(fn, reduce ? Math.min(ms, 250) : ms));
+  function stop(){ timers.forEach(clearTimeout); timers = []; running = false; approve.disabled = true; replay.disabled = false; mark(-1); }
+  const bounce = () => { if (!reduce && window.gsap) gsap.fromTo('#pill .hand', {y:-6}, {y:0, duration:.55, ease:'bounce.out'}); };
+  replay.addEventListener('click', () => {
+    stop(); running = true; replay.disabled = true; open(false); setPill('', '', false);
+    const y = $('.screen').getBoundingClientRect().top; if (y < 80) scrollBy({top: y - 90, behavior: reduce ? 'auto' : 'smooth'});  // keep the notch clear of the header
+    later(() => { mark(0); setPill('<span class="spin"></span>', 'Claude Code · web', true); live.textContent = 'Agent running'; }, 500);
+    later(() => { mark(1); setPill('<span class="hand warn">✋</span><span class="warn">needs you</span>', '<span class="warn">web · 1</span>', true); bounce();
+      approve.disabled = false; live.textContent = 'Agent needs you: press Approve'; }, 1900);
+  });
+  approve.addEventListener('click', () => {
+    approve.disabled = true; mark(2); setPill('<span class="ok">✓</span>approved', 'web', true); live.textContent = 'Approved by you';
+    later(() => { mark(3); setPill('<span class="spin"></span>npm test', '<span class="mono">0:07 ☕</span>', true); live.textContent = 'islet run npm test'; }, 900);
+    later(() => { mark(4); setPill('<span class="ok">✓ done</span>', '<span class="mono">0:12</span>', true); live.textContent = 'Done · exit 0'; }, 2600);
+    later(() => { np.innerHTML = panels.agents; setPill('', '', false); open(true); running = false; replay.disabled = false; live.textContent = 'Agents tab'; }, 4000);
+  });
+
+  /* "Try the notch": bring the whole stage into view below the header, then play the sample run */
+  $('#try').addEventListener('click', e => {
+    e.preventDefault();
+    const from = scrollY, to = $('#stage').getBoundingClientRect().top + scrollY - 76, t0 = performance.now(), dur = reduce ? 0 : 600;
+    const step = now => { const p = dur ? Math.min(1, (now - t0) / dur) : 1;
+      document.documentElement.style.scrollBehavior = 'auto';   // our own easing, not the CSS smooth scroll
+      scrollTo(0, from + (to - from) * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(step); else finish(); };
+    let done = false;
+    const finish = () => { if (done) return; done = true; scrollTo(0, to); document.documentElement.style.scrollBehavior = ''; replay.click(); };
+    requestAnimationFrame(step); setTimeout(finish, dur + 250);   // still lands if the tab isn't painting frames
+  });
+
+  /* ── context tabs: content stays in the DOM; deep-linkable ── */
+  const tabBtns = $$('.ctx-list [role=tab]');
+  const selectTab = (b, focus) => {
+    tabBtns.forEach(t => { const on = t === b; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; $('#' + t.getAttribute('aria-controls')).hidden = !on; });
+    if (focus) b.focus();
+    const p = $('#' + b.getAttribute('aria-controls'));
+    if (!reduce && window.gsap) gsap.fromTo(p, {opacity:0, y:8}, {opacity:1, y:0, duration:.42, ease:'power2.out'});
+  };
+  tabBtns.forEach((b, i) => {
+    b.addEventListener('click', () => { selectTab(b); history.replaceState(null, '', '#' + b.getAttribute('aria-controls')); });
+    b.addEventListener('keydown', e => { const d = {ArrowRight:1, ArrowDown:1, ArrowLeft:-1, ArrowUp:-1}[e.key]; if (d) { e.preventDefault(); selectTab(tabBtns[(i + d + tabBtns.length) % tabBtns.length], true); } });
+  });
+
+  /* ── deep links: FAQ answers open, context panels select ── */
+  const openHash = () => { const h = location.hash.slice(1), el = h && document.getElementById(h);
+    if (!el) return;
+    if (el.tagName === 'DETAILS') el.open = true;
+    if (el.classList.contains('ctx-panel')) selectTab($(`[aria-controls="${h}"]`)); };
+  addEventListener('hashchange', openHash); openHash();
+
+  /* ── header notch compacts on scroll ── */
+  const top = $('.top'); addEventListener('scroll', () => top.classList.toggle('scrolled', scrollY > 30), {passive:true});
+
+  /* ── motion (skipped entirely for reduced motion or if GSAP failed to load) ── */
+  if (reduce || !window.gsap) return;
+  document.documentElement.classList.add('js');
+  gsap.registerPlugin(ScrollTrigger);
+  const heroEls = $$('.hero .rv');
+  gsap.to(heroEls, {opacity:1, y:0, duration:.6, ease:'power3.out', stagger:.06, delay:.05});
+  gsap.from('.navnotch', {scaleX:.2, opacity:0, duration:.6, ease:'power3.out', transformOrigin:'50% 0'});
+  open(false); setTimeout(() => open(true), 900);   // the stage notch "boots": pill first, then springs open
+  $$('.rv').filter(el => !heroEls.includes(el)).forEach(el =>
+    gsap.to(el, {opacity:1, y:0, duration:.6, ease:'power3.out', scrollTrigger:{trigger:el, start:'top 88%', once:true}}));
+  gsap.set('.mod, .basics', {opacity:0, y:14});
+  ScrollTrigger.batch('.mod, .basics', {start:'top 90%', once:true,
+    onEnter: b => gsap.to(b, {opacity:1, y:0, duration:.5, ease:'power3.out', stagger:.055, overwrite:true})});
+})();
 </script>
 </body>
 </html>
