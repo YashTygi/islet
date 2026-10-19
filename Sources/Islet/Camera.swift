@@ -19,13 +19,27 @@ final class CameraController {
             guard running else { return }  // tab left while the prompt was up
             if !configured {
                 configured = true
-                session.sessionPreset = .high
+                // The preview is ~680×220 pt: 720p looks identical and costs about half of 1080p.
+                session.sessionPreset = session.canSetSessionPreset(.hd1280x720) ? .hd1280x720 : .medium
                 if let cam = AVCaptureDevice.default(for: .video), let input = try? AVCaptureDeviceInput(device: cam),
-                   session.canAddInput(input) { session.addInput(input) }
+                   session.canAddInput(input) {
+                    session.addInput(input)
+                    Self.capFrameRate(cam, fps: 24)
+                }
             }
             nonisolated(unsafe) let s = session
             Self.queue.async { s.startRunning() }
         }
+    }
+
+    /// 24 fps is plenty for a mirror (~20 % less work than 30). Only if the camera supports it.
+    private static func capFrameRate(_ cam: AVCaptureDevice, fps: Double) {
+        guard cam.activeFormat.videoSupportedFrameRateRanges.contains(where: { $0.minFrameRate <= fps && fps <= $0.maxFrameRate }),
+              (try? cam.lockForConfiguration()) != nil else { return }
+        let d = CMTime(value: 1, timescale: CMTimeScale(fps))
+        cam.activeVideoMinFrameDuration = d
+        cam.activeVideoMaxFrameDuration = d
+        cam.unlockForConfiguration()
     }
 
     func stop() {

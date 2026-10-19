@@ -18,6 +18,16 @@ final class NotchModel {
     private(set) var isLocked = false
     /// Gives keyboard focus back to the app the user was in (Esc in a text field).
     @ObservationIgnored var endEditing: () -> Void = {}
+    /// Leave a text field without the out/in blink: drop focus now, hand the keyboard back to your app
+    /// when the nook collapses (where the brief hide is invisible behind the notch).
+    @ObservationIgnored var dropFocus: () -> Void = {}
+    @ObservationIgnored var releaseKeyOnCollapse = false
+
+    func leaveTextField() {
+        guard !isLocked else { return }  // locked = you're using the keyboard here on purpose
+        dropFocus()
+        releaseKeyOnCollapse = true
+    }
     private(set) var isExpanded = false
     private(set) var showsActivity: Bool
     var tab: NotchTab = .home
@@ -133,6 +143,13 @@ final class NotchModel {
         return ctx.context.hasActions || services.prefs.customActions.contains { $0.bundleID == ctx.app?.bundleIdentifier }
     }
 
+    /// PDF open in Preview (front app): drops can be merged into it.
+    var mergePDF: URL? {
+        guard case .preview = services.context.context, let f = services.context.previewFile,
+              f.pathExtension.lowercased() == "pdf" else { return nil }
+        return f
+    }
+
     /// Tabs shown right now: the App tab only exists while the front app has actions.
     var tabs: [NotchTab] { services.prefs.visibleTabs.filter { $0 != .app || hasAppContext } }
 
@@ -167,6 +184,43 @@ final class NotchModel {
         let tabs = self.tabs
         let i = tabs.firstIndex(of: currentTab) ?? 0
         select(tabs[(i + step + tabs.count) % tabs.count], direction: step)
+    }
+
+    /// A file job in progress ("Merging…"): capsule with a moving bar when open, pill when closed.
+    private(set) var workLabel: String?
+
+    func beginWork(_ label: String) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { workLabel = label }
+        activities.working = label
+    }
+
+    func endWork() {
+        withAnimation(.easeOut(duration: 0.2)) { workLabel = nil }
+        activities.working = nil
+    }
+
+    /// "✓ Added to Shelf" toast inside the open nook (independent of the tab you're on).
+    private(set) var toast: String?
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
+
+    /// A Preview/Finder output is ready: put it on the Shelf (with animation + sound), and bring Finder to
+    /// the front with the file selected. Lives on the model, so it works even if the panel or nook closed.
+    func deliver(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        endWork()
+        tray.add(urls)
+        let name = urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) files"
+        activities.chime("Pop")
+        activities.show(.shelved(name: name), for: 4)  // pill when the nook is closed
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { toast = name }
+        toastTask?.cancel()
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.25)) { self?.toast = nil }
+        }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+        NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first?.activate()
     }
 
     func jumpToWaitingAgent() {
@@ -219,6 +273,14 @@ final class NotchModel {
         } completion: { [weak self] in
             guard let self, self.generation == gen else { return }
             self.resizePanel(self.visibleSize)
+            if !expanded {
+                // Hand freed view/render memory back to macOS as soon as the nook closes.
+                malloc_zone_pressure_relief(nil, 0)
+            }
+            if !expanded && self.releaseKeyOnCollapse {
+                self.releaseKeyOnCollapse = false
+                self.endEditing()
+            }
         }
     }
 }
@@ -228,15 +290,9 @@ struct NotchView: View {
 
     var body: some View {
         let size = model.visibleSize
-        let needsYou: Bool = { if case .needsYou = model.activities.current { return !model.isExpanded }; return false }()
         ZStack(alignment: .top) {
             NotchShape(earRadius: NotchModel.earRadius, bottomRadius: model.isExpanded ? 32 : 10)
-                .fill(.black)
-                .overlay {
-                    // "Needs you": orange outline on the collapsed notch (static stroke: no per-frame cost).
-                    NotchShape(earRadius: NotchModel.earRadius, bottomRadius: 10)
-                        .stroke(.orange.opacity(needsYou ? 0.9 : 0), lineWidth: 1.5)
-                }
+                .fill(.black)  // stays seamless with the hardware notch; "needs you" is the ✋ + bounce + sound
             if model.isExpanded {
                 ExpandedContent(model: model)
                     .padding(.top, model.notchSize.height)
@@ -253,6 +309,37 @@ struct NotchView: View {
                         }
                     }
                     // No blur: it forces offscreen rendering every frame of the spring.
+                    .overlay(alignment: .bottom) {
+                        if let label = model.workLabel, model.toast == nil {
+                            HStack(spacing: 8) {
+                                Image(systemName: "doc.badge.gearshape").foregroundStyle(.blue).symbolEffect(.pulse)
+                                Text(label).font(.system(size: 11, weight: .semibold))
+                                ProgressView().progressViewStyle(.linear).tint(.blue).frame(width: 70)
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12).frame(height: 28)
+                            .background(Capsule().fill(Color(white: 0.14)))
+                            .overlay(Capsule().strokeBorder(.blue.opacity(0.35)))
+                            .padding(.bottom, 10)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if let name = model.toast {
+                            HStack(spacing: 7) {
+                                Image(systemName: "tray.and.arrow.down.fill").foregroundStyle(.green)
+                                    .symbolEffect(.bounce, value: name)
+                                Text("Added to Shelf").font(.system(size: 11, weight: .semibold))
+                                Text(name).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1).truncationMode(.middle)
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12).frame(height: 28)
+                            .background(Capsule().fill(Color(white: 0.14)))
+                            .overlay(Capsule().strokeBorder(.green.opacity(0.35)))
+                            .padding(.bottom, 10)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
                     .overlay {
                         if model.showHelp {
                             ShortcutsHelp().transition(.scale(scale: 0.95).combined(with: .opacity))
@@ -287,7 +374,8 @@ private struct ExpandedContent: View {
         let s = model.services
         Group {
             if model.dropTarget != nil || model.fileDragNearby {
-                DropZones(target: model.dropTarget, trayCount: model.tray.items.count)
+                DropZones(target: model.dropTarget, trayCount: model.tray.items.count,
+                          mergeInto: model.mergePDF?.lastPathComponent)
             } else {
                 // Every page fills the same frame and slides in from the side you're moving toward.
                 let d = model.tabDirection
@@ -348,6 +436,7 @@ private struct TopTabs: View {
         } label: {
             Image(systemName: t.symbol)
                 .font(.system(size: 11, weight: .medium))
+                .symbolEffect(.bounce, value: t == .shelf ? badge : 0)  // Shelf icon hops when something lands
                 .frame(width: 28, height: 22)
                 .overlay(alignment: .topTrailing) {
                     if badge > 0 {

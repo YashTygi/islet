@@ -23,6 +23,8 @@ enum LiveActivity: Equatable {
     case transferDone(name: String, airDrop: Bool, ok: Bool)
     case privacy(mic: Bool, camera: Bool, muted: Bool)
     case tunnel(url: String)
+    case shelved(name: String)
+    case working(label: String)
 }
 
 /// Trackpad tap (felt only while a finger rests on a Force Touch trackpad).
@@ -73,6 +75,8 @@ final class ActivityCenter {
     @ObservationIgnored var micMuted = false
     /// Public tunnel URL while a local server is shared (always shown: it's a safety reminder).
     @ObservationIgnored var tunnelURL: String? { didSet { recompute() } }
+    /// A Preview/Finder file job is running ("Merging…"): shown until it finishes.
+    @ObservationIgnored var working: String? { didSet { recompute() } }
     func privacyChanged(mic: Bool, camera: Bool, muted: Bool) {
         self.mic = mic; self.camera = camera; micMuted = muted
         recompute()
@@ -148,6 +152,7 @@ final class ActivityCenter {
         candidates.append((.privacy, mic || camera ? LiveActivity.privacy(mic: mic, camera: camera, muted: micMuted) : nil))
         candidates.append((nil, tunnelURL.map { LiveActivity.tunnel(url: $0) }))
         candidates.append((nil, alert?.activity))
+        candidates.append((nil, working.map { LiveActivity.working(label: $0) }))
         candidates.append((.tasks, task))
         candidates.append((.downloads, downloads.first.map {
             LiveActivity.download(name: $0.name, fraction: $0.fraction, airDrop: $0.airDrop, count: downloads.count)
@@ -400,6 +405,8 @@ struct ActivityWings: View {
         case .transferDone: "transferDone"
         case .privacy: "privacy"
         case .tunnel: "tunnel"
+        case .shelved: "shelved"
+        case .working: "working"
         }
     }
 
@@ -438,6 +445,10 @@ struct ActivityWings: View {
             symbol(camera ? "video.fill" : (muted ? "mic.slash.fill" : "mic.fill"), camera ? .green : (muted ? .red : .orange))
         case .tunnel:
             symbol("globe", .green)
+        case .shelved:
+            symbol("tray.and.arrow.down.fill", .green).symbolEffect(.bounce, value: activity)
+        case .working:
+            symbol("doc.badge.gearshape", .blue).symbolEffect(.pulse)  // only for the seconds a job runs
         }
     }
 
@@ -484,6 +495,10 @@ struct ActivityWings: View {
             }
         case .tunnel:
             Text("LIVE").font(.system(size: 10, weight: .heavy)).foregroundStyle(.red)
+        case .shelved:
+            Image(systemName: "checkmark").foregroundStyle(.green)
+        case .working:
+            ProgressView().controlSize(.mini).tint(.blue)
         }
     }
 

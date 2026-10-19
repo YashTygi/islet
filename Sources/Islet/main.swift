@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         termSource.resume()
         if ProcessInfo.processInfo.environment["ISLET_SELFTEST"] != nil {
             DoubleTapDetector.selfTest()
+            CLIInstaller.selfTest()
             exit(0)
         }
         media.state.onActiveChange = { [weak self] on in self?.activities.mediaActive = on }
@@ -68,6 +69,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !firstRun { calendar.start() }
         if let port = ProcessInfo.processInfo.environment["ISLET_TEST_TUNNEL"].flatMap(Int.init) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.services.tunnel.start(port: port) }  // dev hook
+        }
+        if ProcessInfo.processInfo.environment["ISLET_TEST_WORK"] != nil {  // dev hook: working pill for 3 s
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.controllers.first?.model.beginWork("Merging…")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self?.controllers.first?.model.endWork() }
+            }
+        }
+        if let f = ProcessInfo.processInfo.environment["ISLET_TEST_DELIVER"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.controllers.first?.model.deliver([URL(fileURLWithPath: f)])  // dev hook
+            }
         }
         if let f = ProcessInfo.processInfo.environment["ISLET_TEST_AIRDROP"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { AirDrop.send([URL(fileURLWithPath: f)]) }  // dev hook

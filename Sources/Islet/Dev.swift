@@ -226,7 +226,7 @@ struct DevView: View {
     private func section<C: View>(_ title: String, symbol: String, @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Label(title, systemImage: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
-            ScrollView(showsIndicators: false) { VStack(alignment: .leading, spacing: 2) { content() } }
+            ScrollView(showsIndicators: false) { LazyVStack(alignment: .leading, spacing: 2) { content() } }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }

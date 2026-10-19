@@ -1,5 +1,4 @@
 import AppKit
-import CoreImage.CIFilterBuiltins
 import SwiftUI
 
 /// Browser actions for the App tab. Tabs are read and changed via AppleScript (one Automation
@@ -181,16 +180,6 @@ enum Browser {
         return c.string
     }
 
-    static func qr(_ text: String) -> NSImage? {
-        let f = CIFilter.qrCodeGenerator()
-        f.message = Data(text.utf8)
-        f.correctionLevel = "M"
-        guard let img = f.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)) else { return nil }
-        let rep = NSCIImageRep(ciImage: img)
-        let ns = NSImage(size: rep.size)
-        ns.addRepresentation(rep)
-        return ns
-    }
 
     // MARK: GitHub
 

@@ -12,6 +12,7 @@ enum AppContext: Equatable {
     case claude(app: String)
     case terminal(app: String)
     case finder
+    case preview
     case other(app: String)
 
     static let codeIDs = ["com.microsoft.VSCode", "com.todesktop.230313mzl4w4u92"]
@@ -27,6 +28,7 @@ enum AppContext: Equatable {
         else if id == "com.anthropic.claudefordesktop" || id.hasPrefix("com.apple.ScriptEditor.id.Claude") { self = .claude(app: name) }
         else if Self.terminalIDs.contains(id) { self = .terminal(app: name) }
         else if id == "com.apple.finder" { self = .finder }
+        else if id == "com.apple.Preview" { self = .preview }
         else { self = .other(app: name) }
     }
 
@@ -57,6 +59,7 @@ final class ContextService {
         context = AppContext(a)
         // Finder is "in front" whenever you're on the desktop; it only counts with a real window open.
         if context == .finder && !Self.finderHasWindow(a) { context = .other(app: "Finder") }
+        refreshPreview()
         icon = a?.icon
         icon?.size = NSSize(width: 32, height: 32)
         debugLog("context: \(context)")
@@ -64,9 +67,21 @@ final class ContextService {
 
     /// Re-check when the notch opens (Finder windows can close without an app switch).
     func refresh() {
+        refreshPreview()
         guard let a = app, a.bundleIdentifier == "com.apple.finder" else { return }
         let ctx: AppContext = Self.finderHasWindow(a) ? .finder : .other(app: "Finder")
         if ctx != context { context = ctx }
+    }
+
+    /// The image or PDF Preview has open (from its window's AXDocument). Preview with nothing open has no actions.
+    private(set) var previewFile: URL?
+
+    private func refreshPreview() {
+        guard app?.bundleIdentifier == "com.apple.Preview" else { previewFile = nil; return }
+        let url = attribute(kAXDocumentAttribute).flatMap(URL.init(string:)).flatMap { $0.isFileURL ? $0 : nil }
+        if url != previewFile { previewFile = url }
+        let ctx: AppContext = url == nil ? .other(app: "Preview") : .preview
+        if ctx != context { context = ctx; debugLog("context: \(ctx) \(url?.lastPathComponent ?? "")") }
     }
 
     /// A real, visible Finder window (layer 0) as opposed to just the desktop. Stage Manager's side-strip
@@ -279,6 +294,9 @@ struct AppTabView: View {
     private let ports = State<[ListeningPort]>(initialValue: [])
     private let flash = State<String?>(initialValue: nil)  // see Scrubber: no @State without Xcode
     private let showQR = State(initialValue: false)
+    /// QR made once per URL by the `islet` helper (keeps Core Image out of Islet's memory).
+    private let qrImage = State<NSImage?>(initialValue: nil)
+    private let qrFor = State(initialValue: "")
     private let finder = State<(folder: String?, selection: [String])>(initialValue: (nil, []))
 
     var body: some View {
@@ -298,8 +316,10 @@ struct AppTabView: View {
                 case .browser: browserPanel
                 case .figma: figmaPanel
                 case .claude: claudePanel
-                case .terminal: workPanel(filter: nil)
+                case .terminal: TerminalPanel(model: model)
                 case .finder: finderPanel
+                case .preview:
+                    if let f = ctx.previewFile { PreviewPanel(model: model, file: f).id(f) }
                 case .other, .none: customPanel
                 }
             }
@@ -322,6 +342,7 @@ struct AppTabView: View {
         case .claude(let app): app
         case .terminal(let app): app
         case .finder: finder.wrappedValue.folder.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Finder"
+        case .preview: model.services.context.previewFile?.lastPathComponent ?? "Preview"
         case .other(let app): app
         case .none: "No app in front"
         }
@@ -445,7 +466,7 @@ struct AppTabView: View {
                     }
                 }
             }
-            if showQR.wrappedValue || lan != nil, let img = Browser.qr(publicURL(for: u) ?? lan ?? u) {
+            if showQR.wrappedValue || lan != nil, let img = qrImage.wrappedValue, qrFor.wrappedValue == (publicURL(for: u) ?? lan ?? u) {
                 VStack(spacing: 4) {
                     Image(nsImage: img).interpolation(.none).resizable()
                         .frame(width: 104, height: 104)
@@ -454,6 +475,15 @@ struct AppTabView: View {
                         .font(.system(size: 9)).foregroundStyle(.white.opacity(0.55))
                 }
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+        }
+        .task(id: (showQR.wrappedValue || lan != nil) ? (publicURL(for: u) ?? lan ?? u) : "") {
+            let text = (showQR.wrappedValue || lan != nil) ? (publicURL(for: u) ?? lan ?? u) : ""
+            guard !text.isEmpty, text != qrFor.wrappedValue else { return }
+            let r = await mediaTool(["qr", text])
+            if let b64 = r["png"] as? String, let data = Data(base64Encoded: b64) {
+                qrImage.wrappedValue = NSImage(data: data)
+                qrFor.wrappedValue = text
             }
         }
     }
@@ -548,6 +578,21 @@ struct AppTabView: View {
                     chip("Copy path", "doc.on.doc") {
                         copyToClipboard(targets.map { $0.hasSuffix("/") && $0.count > 1 ? String($0.dropLast()) : $0 }.joined(separator: "\n"))
                         done("Copied")
+                    }
+                    let images = f.selection.filter { ["png", "jpg", "jpeg", "heic", "tiff", "tif", "gif", "webp", "bmp"].contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }
+                    if !images.isEmpty {
+                        chip(images.count == 1 ? "Image → PDF" : "\(images.count) images → PDF", "doc.richtext") {
+                            Task {
+                                model.beginWork("Making PDF…")
+                                let r = await mediaTool(["images-pdf"] + images)
+                                if r["ok"] as? Bool != true { model.endWork() }
+                                if r["ok"] as? Bool == true, let out = r["out"] as? String {
+                                    let url = URL(fileURLWithPath: out)
+                                    model.deliver([url])
+                                    done("Saved \(url.lastPathComponent) in \(shortPath(url.deletingLastPathComponent().path)) · on the Shelf")
+                                } else { done(r["error"] as? String ?? "Failed") }
+                            }
+                        }
                     }
                     chip("Copy relative path", "arrow.turn.down.right") {
                         copyToClipboard(targets.map(ContextService.relativePath).joined(separator: "\n"))
@@ -705,7 +750,6 @@ func shell(_ command: String, cwd: String, project: String, tasks: TaskStore) {
     let id = UUID().uuidString
     let log = FileManager.default.temporaryDirectory.appendingPathComponent("islet-\(id.prefix(8)).log")
     FileManager.default.createFile(atPath: log.path, contents: nil)
-    tasks.apply(["id": id, "state": "start", "command": command, "project": project])
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/bin/zsh")
     p.arguments = ["-lc", command]
@@ -715,7 +759,14 @@ func shell(_ command: String, cwd: String, project: String, tasks: TaskStore) {
         let code = proc.terminationStatus
         Task { @MainActor in tasks.apply(["id": id, "state": "finish", "code": "\(code)", "command": command]) }
     }
-    do { try p.run() } catch { tasks.apply(["id": id, "state": "finish", "code": "127", "command": command]) }
+    do {
+        try p.run()
+        tasks.apply(["id": id, "state": "start", "command": command, "project": project,
+                     "pid": String(p.processIdentifier), "cwd": cwd])
+    } catch {
+        tasks.apply(["id": id, "state": "start", "command": command, "project": project])
+        tasks.apply(["id": id, "state": "finish", "code": "127", "command": command])
+    }
 }
 
 /// A user-defined button for one app, set up in the control panel.

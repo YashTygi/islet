@@ -501,7 +501,7 @@ struct CodePanel: View {
     private func back() {
         let leavingTextBox = mode.wrappedValue == .commit
         go(.main)
-        if leavingTextBox && !model.isLocked { model.endEditing() }
+        if leavingTextBox { model.leaveTextField() }
     }
 
     /// Slide to a view. The outgoing page reads its exit edge from its last drawn frame, so a flipped

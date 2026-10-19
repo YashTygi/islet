@@ -188,7 +188,9 @@ private struct OnboardingView: View {
             }
             permissionRow("`islet` command", "Run `islet run npm test` in any terminal to watch long tasks in the notch.",
                           granted: CLIInstaller.isInstalled, action: "Install") {
-                do { try CLIInstaller.install() } catch { self.error.wrappedValue = error.localizedDescription }
+                do { try CLIInstaller.install() } catch {
+                    self.error.wrappedValue = "Couldn't install the command: \(error.localizedDescription)"
+                }
                 tick.wrappedValue += 1
             }
             Text("Usage meter: reads Claude Code's local logs. Nothing leaves your Mac.").font(.caption).foregroundStyle(.secondary)

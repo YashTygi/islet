@@ -79,6 +79,17 @@ phase "agent storm: 1200 events/120 ids"  agents 1200
 phase "task storm: 60 parallel islet run" tasks 60
 phase "download storm: 40 concurrent"     downloads 40
 phase "hover 30 cycles (all tabs data)"   hover 30
+front() { osascript -e "tell application \"$1\" to activate" >/dev/null 2>&1; sleep 1.5; }
 phase "hold open 60s (App tab polling)"   hold 60
+front Terminal
+phase "hold 60s: Terminal panel"          hold 60
+cp "$S/claude/p1/s.jsonl" /dev/null
+SAMPLE_PDF=$(mktemp -d)/sample.pdf
+build/Islet.app/Contents/Helpers/islet media images-pdf Assets/AppIcon-1024.png Assets/AppIcon-1024.png >/dev/null 2>&1
+cp Assets/AppIcon-1024.pdf "$SAMPLE_PDF" 2>/dev/null || cp "$(ls -t Assets/*.pdf | head -1)" "$SAMPLE_PDF"
+open -a Preview "$SAMPLE_PDF"; sleep 2; front Preview
+phase "hold 30s: Preview panel (PDF)"      hold 30
+osascript -e 'tell application "Preview" to close every window' >/dev/null 2>&1
+rm -f Assets/AppIcon-1024*.pdf
 phase "idle 60s (settle)"                 idle 60
 rm -rf "$S"

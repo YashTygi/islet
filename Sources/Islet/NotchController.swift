@@ -50,6 +50,12 @@ final class NotchController {
         }
 
         model.resizePanel = { [weak self] size in self?.resize(to: size) }
+        model.dropFocus = { [weak self] in
+            guard let self else { return }
+            self.panel.makeFirstResponder(nil)
+            // Not "editing" any more: hover-out may collapse the nook again.
+            self.model.setEditing(false, pointerInside: self.panel.frame.contains(NSEvent.mouseLocation))
+        }
         model.endEditing = { [weak self] in
             guard let self, self.panel.isKeyWindow else { return }
             self.model.hoverSuppressedUntil = .now + 0.5
@@ -77,6 +83,17 @@ final class NotchController {
             switch target {
             case .tray: self.model.tray.add(urls)
             case .airDrop: AirDrop.send(urls)
+            case .merge:
+                if let pdf = self.model.mergePDF {
+                    let model = self.model
+                    Task {
+                        model.beginWork("Merging…")
+                        let r = await mediaTool(["pdf-merge", pdf.path] + urls.map(\.path))
+                        if r["ok"] as? Bool != true { model.endWork() }
+                        if let out = r["out"] as? String { model.deliver([URL(fileURLWithPath: out)]) }
+                        else { model.activities.show(.transferDone(name: r["error"] as? String ?? "Merge failed", airDrop: false, ok: false), for: 5) }
+                    }
+                }
             case nil: break
             }
             self.model.dragEnded(dropped: target, pointerInside: self.panel.frame.contains(NSEvent.mouseLocation))
@@ -212,7 +229,10 @@ final class NotchController {
     /// Right-hand strip of the expanded nook is the AirDrop zone; everything else is the tray.
     private func zone(x: CGFloat, width: CGFloat) -> DropTarget {
         guard model.isExpanded else { return .tray }
-        return x > width - NotchModel.contentInset - NotchModel.airDropZoneWidth - 6 ? .airDrop : .tray
+        let airDropStart = width - NotchModel.contentInset - NotchModel.airDropZoneWidth - 6
+        if x > airDropStart { return .airDrop }
+        if model.mergePDF != nil, x > airDropStart - NotchModel.airDropZoneWidth - 12 { return .merge }
+        return .tray
     }
 
     private func resize(to size: CGSize) {

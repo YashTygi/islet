@@ -79,19 +79,25 @@ enum AirDrop {
 
 // MARK: Views
 
-enum DropTarget { case tray, airDrop }
+enum DropTarget { case tray, merge, airDrop }
 
 /// Shown while a file drag is over the nook.
 struct DropZones: View {
     /// Zone under the pointer, or nil while the drag is only approaching.
     let target: DropTarget?
     let trayCount: Int
+    /// Preview has a PDF open: offer "Merge into <name>".
+    var mergeInto: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             Zone(symbol: "tray.and.arrow.down.fill",
                  title: trayCount > 0 ? "Add to Tray (\(trayCount))" : "Add to Tray",
                  active: target == .tray)
+            if let name = mergeInto {
+                Zone(symbol: "plus.rectangle.on.rectangle", title: "Merge into \(name)", active: target == .merge)
+                    .frame(width: NotchModel.airDropZoneWidth)
+            }
             Zone(symbol: "dot.radiowaves.left.and.right", title: "AirDrop", active: target == .airDrop)
                 .frame(width: NotchModel.airDropZoneWidth)
         }

@@ -150,9 +150,11 @@ struct RunningTask: Identifiable, Equatable {
     let project: String
     let hostApp: String
     let start: Date
+    var pid: Int32 = 0
+    var cwd: String = ""
 }
 
-struct FinishedTask: Identifiable, Equatable {
+struct FinishedTask: Identifiable, Equatable, Codable {
     let id: String
     let command: String
     let project: String
@@ -161,22 +163,55 @@ struct FinishedTask: Identifiable, Equatable {
     let code: Int
     let duration: TimeInterval
     let end: Date
+    var cwd: String = ""
 }
 
 @MainActor @Observable
 final class TaskStore {
     private(set) var running: [RunningTask] = []
+    /// Last 15 finished tasks, kept across restarts (tiny JSON).
     private(set) var finished: [FinishedTask] = []
     @ObservationIgnored private let center: ActivityCenter
+    @ObservationIgnored private let file = appSupportFile("tasks.json")
+    static let keep = 15
 
-    init(center: ActivityCenter) { self.center = center }
+    init(center: ActivityCenter) {
+        self.center = center
+        if let d = try? Data(contentsOf: file), let f = try? JSONDecoder().decode([FinishedTask].self, from: d) { finished = f }
+    }
+
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+
+    /// Coalesced: one small write a second at most, however many tasks finish (e.g. 60 at once).
+    private func save() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, let self else { return }
+            if let d = try? JSONEncoder().encode(self.finished) { try? d.write(to: self.file, options: .atomic) }
+        }
+    }
+
+    /// Stop a running `islet run` task: Ctrl-C first, then terminate if it ignores that.
+    func stop(_ t: RunningTask) {
+        guard t.pid > 0 else { return }
+        Darwin.kill(t.pid, SIGINT)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3) { if Darwin.kill(t.pid, 0) == 0 { Darwin.kill(t.pid, SIGTERM) } }
+    }
+
+    /// Run a finished command again in its folder, in the background (shown as a task with a chime).
+    func rerun(_ t: FinishedTask) {
+        let dir = t.cwd.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.path : t.cwd
+        shell(t.command, cwd: dir, project: t.project, tasks: self)
+    }
 
     func apply(_ info: [String: String]) {
         guard let id = info["id"] else { return }
         switch info["state"] {
         case "start":
             let t = RunningTask(id: id, command: info["command"] ?? "task", project: info["project"] ?? "",
-                                hostApp: info["hostApp"] ?? "", start: .now)
+                                hostApp: info["hostApp"] ?? "", start: .now,
+                                pid: Int32(info["pid"] ?? "") ?? 0, cwd: info["cwd"] ?? "")
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 running.append(t)
                 if running.count > 30 { running.removeFirst(running.count - 30) }  // cap; finishes still alert
@@ -187,12 +222,13 @@ final class TaskStore {
             let duration = started.map { Date.now.timeIntervalSince($0.start) } ?? 0
             let f = FinishedTask(id: id, command: started?.command ?? info["command"] ?? "task",
                                  project: started?.project ?? "", hostApp: started?.hostApp ?? info["hostApp"] ?? "",
-                                 ok: code == 0, code: code, duration: duration, end: .now)
+                                 ok: code == 0, code: code, duration: duration, end: .now, cwd: started?.cwd ?? "")
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 running.removeAll { $0.id == id }
                 finished.insert(f, at: 0)
-                if finished.count > 8 { finished.removeLast(finished.count - 8) }
+                if finished.count > Self.keep { finished.removeLast(finished.count - Self.keep) }
             }
+            save()
             center.show(.taskDone(command: f.command, ok: f.ok, duration: duration), for: 6)
             center.chime(f.ok ? "Glass" : "Basso")
         default:
@@ -203,6 +239,7 @@ final class TaskStore {
 
     func clearFinished() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { finished.removeAll() }
+        save()
     }
 }
 
@@ -263,7 +300,7 @@ struct WorkView: View {
                     Button("Clear", action: clear).buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(.white.opacity(0.45))
                 }
             }
-            ScrollView(showsIndicators: false) { VStack(alignment: .leading, spacing: 3) { content() } }
+            ScrollView(showsIndicators: false) { LazyVStack(alignment: .leading, spacing: 3) { content() } }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }

@@ -284,10 +284,10 @@ private struct AgentsPage: View {
             }
             Section {
                 LabeledContent("`islet` command") {
-                    if CLIInstaller.isInstalled {
-                        Label("~/.local/bin/islet", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    if let where_ = CLIInstaller.location {
+                        Label(shortPath(where_), systemImage: "checkmark.circle.fill").foregroundStyle(.green).lineLimit(1)
                     } else {
-                        Button("Install") { run(CLIInstaller.install) }
+                        Button("Install") { run { try CLIInstaller.install() } }
                     }
                 }
                 Text("islet run npm test        # watch any long task\nislet agent waiting --name Cursor   # report from any tool")
@@ -380,28 +380,124 @@ enum ClaudeHooks {
     }
 }
 
-/// `islet` on your PATH via a symlink in ~/.local/bin (where Claude Code installs itself too).
+/// Puts `islet` on your PATH without admin rights. Tries, in order: ~/.local/bin, /opt/homebrew/bin,
+/// /usr/local/bin (whichever is writable; ~/.local can be root-owned on some Macs), else adds Islet's own
+/// Helpers folder to PATH in ~/.zshrc. If the chosen folder isn't on your PATH, ~/.zshrc gets one marked line.
 enum CLIInstaller {
-    static let link = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/islet")
+    static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
+    static var candidates: [URL] {
+        [home.appendingPathComponent(".local/bin"), URL(fileURLWithPath: "/opt/homebrew/bin"), URL(fileURLWithPath: "/usr/local/bin")]
+    }
+    static var zshrc: URL { home.appendingPathComponent(".zshrc") }
+    private static let marker = "# Added by Islet: makes the `islet` command available"
 
-    static var isInstalled: Bool {
-        (try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) == ClaudeHooks.cliPath
+    /// Where `islet` is reachable from, if installed.
+    static var location: String? {
+        let fm = FileManager.default
+        for dir in candidates {
+            let link = dir.appendingPathComponent("islet")
+            if (try? fm.destinationOfSymbolicLink(atPath: link.path)) == ClaudeHooks.cliPath { return link.path }
+        }
+        let helpers = (ClaudeHooks.cliPath as NSString).deletingLastPathComponent
+        if let rc = try? String(contentsOf: zshrc, encoding: .utf8), rc.contains("export PATH=\"\(helpers):") { return helpers + " (via ~/.zshrc)" }
+        return nil
     }
 
-    static func install() throws {
+    static var isInstalled: Bool { location != nil }
+
+    /// Returns a short note for the user (where it went, and whether a new terminal is needed).
+    @discardableResult
+    static func install(candidates dirs: [URL]? = nil, zshrc rcURL: URL? = nil) throws -> String {
         let fm = FileManager.default
-        try fm.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if (try? fm.destinationOfSymbolicLink(atPath: link.path)) != nil {
-            try fm.removeItem(at: link)  // our old link (e.g. app moved)
-        } else if fm.fileExists(atPath: link.path) {
-            throw NSError(domain: "Islet", code: 1, userInfo: [NSLocalizedDescriptionKey: "~/.local/bin/islet already exists and isn't a Islet link; left it alone."])
+        let target = ClaudeHooks.cliPath
+        let rc = rcURL ?? zshrc
+        for dir in dirs ?? candidates {
+            // Only ever create our own ~/.local/bin; never create system folders.
+            if dir.path.hasSuffix("/.local/bin"), !fm.fileExists(atPath: dir.path) {
+                try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            }
+            guard fm.isWritableFile(atPath: dir.path) else { continue }
+            let link = dir.appendingPathComponent("islet")
+            if (try? fm.destinationOfSymbolicLink(atPath: link.path)) != nil {
+                try? fm.removeItem(at: link)  // our old link (e.g. app moved)
+            } else if fm.fileExists(atPath: link.path) {
+                continue  // someone else's `islet`: leave it, try the next folder
+            }
+            guard (try? fm.createSymbolicLink(atPath: link.path, withDestinationPath: target)) != nil else { continue }
+            removeOldNotchLink(in: dir)
+            if onPath(dir.path) { return "Installed at \(dir.path)/islet" }
+            try addToZshrc(dir.path, rc: rc)
+            return "Installed at \(dir.path)/islet and added it to PATH in ~/.zshrc. Open a new terminal window."
         }
-        try fm.createSymbolicLink(atPath: link.path, withDestinationPath: ClaudeHooks.cliPath)
-        // Old name: remove ~/.local/bin/notch if it's our link from before the rename.
-        let old = link.deletingLastPathComponent().appendingPathComponent("notch")
-        if let dest = try? fm.destinationOfSymbolicLink(atPath: old.path), dest.hasSuffix("/Contents/MacOS/notch") {
-            try? fm.removeItem(at: old)
+        let helpers = (target as NSString).deletingLastPathComponent
+        try addToZshrc(helpers, rc: rc)
+        return "Added Islet to PATH in ~/.zshrc. Open a new terminal window."
+    }
+
+    private static func addToZshrc(_ dir: String, rc: URL) throws {
+        let line = "export PATH=\"\(dir):$PATH\""
+        let current = (try? String(contentsOf: rc, encoding: .utf8)) ?? ""
+        guard !current.contains(line) else { return }
+        let add = (current.isEmpty || current.hasSuffix("\n") ? "" : "\n") + "\n\(marker)\n\(line)\n"
+        if FileManager.default.fileExists(atPath: rc.path) {
+            let h = try FileHandle(forWritingTo: rc)
+            defer { try? h.close() }
+            try h.seekToEnd()
+            try h.write(contentsOf: Data(add.utf8))
+        } else {
+            try add.write(to: rc, atomically: true, encoding: .utf8)
         }
+    }
+
+    /// Is `dir` on the PATH your terminal gets? (Asks a login zsh; 3 s cap.)
+    static func onPath(_ dir: String) -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        p.arguments = ["-ilc", "print -r -- $PATH"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        p.standardInput = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return false }
+        let killer = DispatchWorkItem { if p.isRunning { p.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3, execute: killer)
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        p.waitUntilExit()
+        killer.cancel()
+        return text.split(whereSeparator: { $0 == ":" || $0 == "\n" }).contains { $0 == dir }
+    }
+
+    private static func removeOldNotchLink(in dir: URL) {
+        let old = dir.appendingPathComponent("notch")
+        if let dest = try? FileManager.default.destinationOfSymbolicLink(atPath: old.path), dest.hasSuffix("/Contents/MacOS/notch") {
+            try? FileManager.default.removeItem(at: old)
+        }
+    }
+
+    /// Run with ISLET_SELFTEST=1: an unwritable first folder must fall through to the next writable one,
+    /// and with none writable, ~/.zshrc must get exactly one PATH line.
+    static func selfTest() {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("islet-cli-test-\(getpid())")
+        let locked = root.appendingPathComponent("locked"), open = root.appendingPathComponent("open")
+        let rc = root.appendingPathComponent("zshrc")
+        try? fm.createDirectory(at: locked, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: open, withIntermediateDirectories: true)
+        try? fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: locked.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path); try? fm.removeItem(at: root) }
+
+        let note = try? install(candidates: [locked, open], zshrc: rc)
+        precondition((try? fm.destinationOfSymbolicLink(atPath: open.appendingPathComponent("islet").path)) == ClaudeHooks.cliPath,
+                     "fallback to the writable folder failed")
+        precondition(!fm.fileExists(atPath: locked.appendingPathComponent("islet").path), "wrote into the locked folder")
+        precondition(note?.contains(open.path) == true)
+
+        _ = try? install(candidates: [locked], zshrc: rc)
+        _ = try? install(candidates: [locked], zshrc: rc)  // twice: must not duplicate
+        let text = (try? String(contentsOf: rc, encoding: .utf8)) ?? ""
+        let helpers = (ClaudeHooks.cliPath as NSString).deletingLastPathComponent
+        precondition(text.components(separatedBy: "export PATH=\"\(helpers):").count == 2, "zshrc PATH line missing or duplicated")
+        print("CLIInstaller self-test passed")
     }
 }
 

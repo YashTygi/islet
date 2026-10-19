@@ -71,7 +71,6 @@ case "run":
     let id = UUID().uuidString
     let cwd = FileManager.default.currentDirectoryPath
     let command = args.joined(separator: " ")
-    post(["kind": "task", "state": "start", "id": id, "command": command, "project": project(cwd)])
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     p.arguments = args  // stdio is inherited: output stays in your terminal
@@ -79,9 +78,12 @@ case "run":
     signal(SIGINT, SIG_IGN)
     do { try p.run() } catch {
         post(["kind": "task", "state": "finish", "id": id, "code": "127", "command": command])
-        FileHandle.standardError.write(Data("notch: \(error.localizedDescription)\n".utf8))
+        FileHandle.standardError.write(Data("islet: \(error.localizedDescription)\n".utf8))
         exit(127)
     }
+    // Sent after launch so Islet knows the child pid (for its Stop button) and folder (for re-run).
+    post(["kind": "task", "state": "start", "id": id, "command": command, "project": project(cwd),
+          "pid": String(p.processIdentifier), "cwd": cwd])
     p.waitUntilExit()
     let code = p.terminationReason == .uncaughtSignal ? 128 + p.terminationStatus : p.terminationStatus
     post(["kind": "task", "state": "finish", "id": id, "code": String(code), "command": command])
@@ -126,6 +128,9 @@ case "hook":
     default:
         usage()
     }
+
+case "media":
+    media(args)
 
 case "usage":
     let enc = JSONEncoder()
