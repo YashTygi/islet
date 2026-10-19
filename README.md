@@ -13,7 +13,7 @@ It watches your background work and adapts to the app you're in.
 ![Apple silicon](https://img.shields.io/badge/Apple%20silicon-arm64-black)
 ![~25 MB RAM](https://img.shields.io/badge/RAM-~25%20MB-4b45d6)
 ![No account](https://img.shields.io/badge/account-none-2ea44f)
-![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![License: MIT + Commons Clause](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue)
 
 <img src="docs/assets/notch-work.png" width="760" alt="Islet's Agents & Tasks tab: a Claude Code agent asking for approval, another running, Codex done, and recent terminal tasks">
 
@@ -68,7 +68,7 @@ The **App tab** appears only when the app in front has something useful to offer
 
 ## Install
 
-1. **[Download Islet.dmg](https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg)** (about 2.5 MB).
+1. **[Download Islet.dmg](https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg)** (about 3 MB).
 2. Open it and drag **Islet** to **Applications**.
 3. Open Islet. macOS will say it can't verify the developer, because Islet isn't notarized yet:
    - Open **System Settings → Privacy & Security**.
@@ -153,7 +153,7 @@ Islet was built after watching a popular notch app grow to gigabytes of RAM, so 
 | Memory, peak under a synthetic stress test | ≤ 35 MB |
 | CPU when idle | 0 % |
 | Background disk writes | none |
-| Download | ~2.5 MB |
+| Download | ~3 MB |
 
 How:
 - **Heavy work in short-lived helpers:** log scanning, image/PDF processing, QR codes and AppleScript all run in separate processes that exit when done.
@@ -209,4 +209,11 @@ Ideas and PRs are welcome: [open an issue](https://github.com/YashTygi/islet/iss
 
 ## License
 
-[MIT](LICENSE) © 2026 Yash Tyagi
+**Free and source-available** under [MIT + Commons Clause](LICENSE) © 2026 Yash Tyagi.
+
+In plain words:
+- ✅ Use it, study it, change it, fork it, and build your own version, for personal or work use.
+- ✅ Share it and your changes, keeping the copyright and license notice ("based on Islet by Yash Tyagi").
+- ❌ Don't sell Islet or a product whose value comes mainly from Islet's code (including paid hosting or support for it).
+
+The vendored mediaremote-adapter keeps its own BSD-3-Clause license. This summary isn't legal advice; the [LICENSE](LICENSE) file is what counts.
