@@ -76,7 +76,7 @@ enum Ports {
     }
 }
 
-// MARK: Docker / GitHub
+// MARK: Containers / GitHub
 
 struct Container: Identifiable { let id: String; let name: String; let image: String; let status: String }
 
@@ -104,7 +104,49 @@ enum Docker {
 }
 
 enum GitHub {
-    static let path = findTool("gh")
+    static let demo = [
+        PullRequest(id: "1", title: "feat(api): stream agent events over SSE", repo: "acme/api-server", number: 142, url: nil, checks: "SUCCESS", review: "APPROVED"),
+        PullRequest(id: "2", title: "fix(web): hydrate dashboard without layout shift", repo: "acme/web", number: 88, url: nil, checks: "PENDING", review: nil),
+        PullRequest(id: "3", title: "chore: bump Swift toolchain to 6.2", repo: "acme/ios", number: 31, url: nil, checks: "FAILURE", review: "CHANGES_REQUESTED"),
+    ]
+
+    /// Re-checked each time so a fresh install is picked up without relaunching.
+    static var path: String? { findTool("gh") }
+
+    enum Status: Equatable { case missing, signedOut, ready(String) }
+
+    /// Local check (reads gh's config, no network), so being offline never looks like "signed out".
+    static func status() async -> Status {
+        guard let path else { return .missing }
+        let user = await runTool(path, ["config", "get", "-h", "github.com", "user"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return user.isEmpty ? .signedOut : .ready(user)
+    }
+
+    static var hasHomebrew: Bool { findTool("brew") != nil }
+
+    /// Homebrew if present, otherwise GitHub's own installer page (its .pkg puts gh in /usr/local/bin).
+    @MainActor static func install() {
+        if let brew = findTool("brew") {
+            runInTerminal("'\(brew)' install gh")
+        } else if let u = URL(string: "https://cli.github.com") {
+            NSWorkspace.shared.open(u)
+        }
+    }
+
+    /// Browser sign-in (device code). gh stores the token in the Keychain; Islet never sees it.
+    @MainActor static func signIn() {
+        guard let path else { return }
+        runInTerminal("'\(path)' auth login --hostname github.com --git-protocol https --web")
+    }
+
+    /// Opening a .command file runs it in Terminal without needing Automation permission.
+    @MainActor private static func runInTerminal(_ command: String) {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("islet-github.command")
+        let script = "#!/bin/zsh\nclear\n\(command) && echo '\\n✓ Done. You can close this window and go back to Islet.'\n"
+        guard (try? script.write(to: url, atomically: true, encoding: .utf8)) != nil,
+              (try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)) != nil else { return }
+        NSWorkspace.shared.open(url)
+    }
 
     /// Your open PRs with the latest commit's CI rollup and review decision (one GraphQL call).
     static func myPullRequests() async -> [PullRequest]? {
@@ -135,6 +177,7 @@ struct DevView: View {
     private let ports = State<[ListeningPort]>(initialValue: [])
     private let containers = State<[Container]?>(initialValue: nil)
     private let prs = State<[PullRequest]?>(initialValue: nil)
+    private let gh = State<GitHub.Status?>(initialValue: nil)
     private let confirmKill = State<String?>(initialValue: nil)  // see Scrubber: no @State without Xcode
 
     var body: some View {
@@ -146,16 +189,23 @@ struct DevView: View {
                     ForEach(ports.wrappedValue) { p in portRow(p) }
                 }
             }
-            section(GitHub.path == nil ? "Docker" : "PRs & CI", symbol: GitHub.path == nil ? "shippingbox" : "arrow.triangle.pull") {
-                if GitHub.path != nil { prRows }
-                if Docker.path != nil { dockerRows } else if GitHub.path == nil {
-                    hint("Install Docker or the GitHub CLI (gh) to see containers, PRs and CI here")
-                }
+            section("PRs & CI", symbol: "arrow.triangle.pull") {
+                prRows
+                dockerRows  // ponytail: unadvertised; rows appear only when containers are running
             }
         }
         .task { await loop(every: 3) { ports.wrappedValue = await Ports.scan() } }
         .task { await loop(every: 5) { containers.wrappedValue = await Docker.containers() } }
-        .task { await loop(every: 60) { prs.wrappedValue = await GitHub.myPullRequests() } }
+        .task {
+            // Poll quickly while setting up so the list appears as soon as sign-in finishes.
+            while !Task.isCancelled {
+                let s = await GitHub.status()
+                gh.wrappedValue = s
+                if case .ready = s { prs.wrappedValue = await GitHub.myPullRequests() }
+                if ProcessInfo.processInfo.environment["ISLET_DEMO"] != nil { gh.wrappedValue = .ready("demo"); prs.wrappedValue = GitHub.demo }  // dev: screenshots
+                try? await Task.sleep(for: .seconds(gh.wrappedValue == .missing || gh.wrappedValue == .signedOut ? 3 : 60))
+            }
+        }
     }
 
     private func loop(every seconds: Double, _ work: @escaping @MainActor () async -> Void) async {
@@ -184,6 +234,25 @@ struct DevView: View {
     }
 
     @ViewBuilder private var prRows: some View {
+        switch gh.wrappedValue {
+        case nil: EmptyView()
+        case .missing: setup("See your pull requests and CI status here.", button: "Set up GitHub") { GitHub.install() }
+        case .signedOut: setup("One step left: sign in to GitHub in your browser.", button: "Sign in to GitHub") { GitHub.signIn() }
+        case .ready: prList
+        }
+    }
+
+    private func setup(_ text: String, button: String, action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            hint(text)
+            Button(button, action: action)
+                .buttonStyle(.plain).font(.system(size: 11, weight: .semibold))
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(Capsule().fill(.white.opacity(0.15)))
+        }
+    }
+
+    @ViewBuilder private var prList: some View {
         if let prs = prs.wrappedValue {
             if prs.isEmpty { hint("No open pull requests") }
             ForEach(prs) { pr in
@@ -202,13 +271,12 @@ struct DevView: View {
                 .buttonStyle(.plain)
             }
         } else {
-            hint("Run `gh auth login` to see your PRs")
+            hint("Couldn't load pull requests")
         }
     }
 
     @ViewBuilder private var dockerRows: some View {
         if let cs = containers.wrappedValue {
-            if cs.isEmpty { hint("No running containers") }
             ForEach(cs) { c in
                 HStack(spacing: 6) {
                     Image(systemName: "shippingbox.fill").foregroundStyle(.cyan)
@@ -218,8 +286,6 @@ struct DevView: View {
                 }
                 .frame(height: 20)
             }
-        } else {
-            hint("Docker isn't running")
         }
     }
 

@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Islet: the notch for developers</title>
+<meta name="description" content="Islet is a free, open-source macOS notch app for developers. It watches your AI agents and long tasks, and adapts to the app you're in. About 25 MB of RAM, no account.">
+<meta property="og:title" content="Islet: the notch for developers">
+<meta property="og:description" content="Agents that need you, islet run, PRs and CI, and a notch that changes with the app you're in. About 25 MB. No account.">
+<meta property="og:image" content="https://yashtygi.github.io/islet/assets/notch-work.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/favicon.png">
+<style>
+  :root {
+    --bg: #07070a; --panel: #111116; --line: #23232c; --text: #ececf1; --muted: #9a9aa8;
+    --accent: #6e66ff; --accent-2: #8f88ff; --orange: #ff9f43; --green: #34c759;
+    --radius: 18px; --max: 1080px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre { font-family: "SF Mono", ui-monospace, Menlo, monospace; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 20px; }
+
+  /* top bar */
+  header { position: sticky; top: 0; z-index: 10; backdrop-filter: saturate(160%) blur(14px);
+    background: color-mix(in srgb, var(--bg) 78%, transparent); border-bottom: 1px solid var(--line); }
+  .bar { display: flex; align-items: center; gap: 16px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  .bar nav { margin-left: auto; display: flex; gap: 22px; font-size: 14px; }
+  .bar nav a { color: var(--muted); }
+  .bar nav a:hover { color: var(--text); text-decoration: none; }
+  @media (max-width: 640px) { .bar nav .hide-sm { display: none; } .eyebrow { font-size: 12px; max-width: 100%; } .hero { padding-top: 48px; } }
+
+  /* hero */
+  .hero { text-align: center; padding: 76px 20px 40px; position: relative; overflow: hidden; }
+  .hero::before { content: ""; position: absolute; inset: -40% -10% auto; height: 520px; z-index: -1;
+    background: radial-gradient(closest-side, rgba(110,102,255,.28), transparent 70%); }
+  .eyebrow { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: var(--panel); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 10px var(--orange); }
+  h1 { font-size: clamp(40px, 7vw, 72px); line-height: 1.04; letter-spacing: -0.03em; margin: 22px 0 14px; }
+  h1 span { background: linear-gradient(90deg, #fff, var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 640px; margin: 0 auto 30px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: 14px;
+    font-weight: 650; font-size: 16px; border: 1px solid var(--line); color: var(--text); background: var(--panel); }
+  .btn:hover { text-decoration: none; border-color: #3a3a48; }
+  .btn.primary { background: var(--accent); border-color: transparent; color: #fff; box-shadow: 0 8px 30px rgba(110,102,255,.35); }
+  .btn.primary:hover { background: #7d76ff; }
+  .btn svg { width: 18px; height: 18px; }
+  .fine { font-size: 13px; color: var(--muted); margin-top: 14px; }
+
+  /* notch showcase */
+  .showcase { margin: 46px auto 0; max-width: 860px; }
+  .screen { position: relative; border-radius: 22px; padding: 0 0 18px; background: linear-gradient(#1a1a22, #0b0b0f);
+    border: 1px solid var(--line); overflow: hidden; }
+  .menubar { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
+    font-size: 12px; color: #c9c9d3; background: rgba(255,255,255,.04); }
+  .shot { display: block; width: calc(100% - 36px); margin: -30px auto 0; position: relative; }
+  .shot img { width: 100%; height: auto; display: block; transition: opacity .35s ease; }
+  .tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+  .tab { font: inherit; font-size: 14px; color: var(--muted); background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer; }
+  .tab[aria-selected="true"] { color: #fff; border-color: var(--accent); background: rgba(110,102,255,.16); }
+  .caption { text-align: center; color: var(--muted); font-size: 14px; min-height: 2.6em; margin: 12px auto 0; max-width: 620px; }
+
+  /* sections */
+  section { padding: 72px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.02em; margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 34px; max-width: 640px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+  .card h3 { margin: 10px 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .ico { font-size: 22px; }
+  .apps { display: grid; gap: 12px; }
+  .app { display: grid; grid-template-columns: 170px 1fr; gap: 18px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 16px 20px; }
+  .app b { color: #fff; }
+  .app span { color: var(--muted); font-size: 15px; }
+  @media (max-width: 640px) { .app { grid-template-columns: 1fr; gap: 4px; } }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; text-align: center; }
+  .stat b { display: block; font-size: 34px; letter-spacing: -0.02em; }
+  .stat span { color: var(--muted); font-size: 14px; }
+
+  pre { background: #0d0d12; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; overflow-x: auto;
+    font-size: 14px; line-height: 1.7; color: #d7d7e0; margin: 0; }
+  .c { color: #6f6f80; }
+  .two { display: grid; gap: 24px; grid-template-columns: 1fr 1fr; align-items: start; }
+  @media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
+
+  ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  ol.steps li { counter-increment: s; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px 16px 58px; position: relative; color: var(--muted); }
+  ol.steps li b { color: var(--text); }
+  ol.steps li::before { content: counter(s); position: absolute; left: 16px; top: 15px; width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(110,102,255,.18); color: var(--accent-2); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+
+  kbd { font: 600 13px "SF Mono", ui-monospace, monospace; background: #1b1b23; border: 1px solid #2d2d38; border-bottom-width: 2px;
+    border-radius: 6px; padding: 2px 7px; color: #e6e6ee; }
+  .keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 24px; }
+  .keys div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line); color: var(--muted); }
+
+  .final { text-align: center; }
+  footer { border-top: 1px solid var(--line); padding: 34px 0 50px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="#"><img src="assets/icon-256.png" alt="">Islet</a>
+    <nav>
+      <a href="#features" class="hide-sm">Features</a>
+      <a href="#apps" class="hide-sm">Context</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/YashTygi/islet">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div class="eyebrow"><span class="dot"></span> Claude Code · web · Approve: run database migration?</div>
+    <h1><span>The notch for developers.</span></h1>
+    <p class="lede">Islet watches your AI agents and long tasks, and changes with the app you're in. Everything a notch app does, plus the things you actually wait on.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.9-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.3.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.8-1-2.8-4.1zM14 5.2c.7-.8 1.2-2 1-3.2-1 .1-2.2.7-3 1.5-.6.7-1.2 1.9-1 3.1 1.1.1 2.3-.6 3-1.4z"/></svg>
+        Download for Mac
+      </a>
+      <a class="btn" href="https://github.com/YashTygi/islet">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.3 4.8 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"/></svg>
+        Star on GitHub
+      </a>
+    </div>
+    <p class="fine">Free &amp; open source (MIT) · Apple silicon · macOS 14+ · ~2.5 MB · No account</p>
+
+    <div class="showcase">
+      <div class="screen">
+        <div class="menubar"><span>&#63743;&nbsp;&nbsp;Code&nbsp;&nbsp;File&nbsp;&nbsp;Edit</span><span>Tue 9:41</span></div>
+        <div class="shot"><img id="shot" src="assets/notch-work.png" alt="Islet's Agents & Tasks tab" width="1360" height="440"></div>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Islet tabs">
+        <button class="tab" role="tab" aria-selected="true" data-img="notch-work.png" data-cap="Agents &amp; Tasks: who needs you, what's running, what just finished.">Agents</button>
+        <button class="tab" role="tab" aria-selected="false" data-img="notch-app.png" data-cap="In Chrome on localhost: a phone link + QR, or a public link with one click.">App tab</button>
+        <button class="tab" role="tab" aria-selected="false" data-img="notch-dev.png" data-cap="Dev: listening ports with open/kill, your PRs with CI and review status.">Dev</button>
+        <button class="tab" role="tab" aria-selected="false" data-img="notch-home.png" data-cap="Home: now playing, next meeting with Join, Claude usage.">Home</button>
+      </div>
+      <p class="caption" id="cap">Agents &amp; Tasks: who needs you, what's running, what just finished.</p>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>Built around what you wait on</h2>
+      <p class="sub">Not another everything-app. Every feature earns its place by helping someone who has work running in the background or is building something right now.</p>
+      <div class="grid">
+        <div class="card"><div class="ico">✋</div><h3>Agents that need you</h3><p>Claude Code and Codex report running, needs you, done or error per project. The notch bounces and chimes; press <kbd>J</kbd> to jump to the right terminal.</p></div>
+        <div class="card"><div class="ico">⏱</div><h3>islet run anything</h3><p><code>islet run npm test</code> shows the task live, chimes at the end, passes the exit code through. Stop or re-run it from the notch.</p></div>
+        <div class="card"><div class="ico">🪄</div><h3>Context-aware</h3><p>The App tab turns into a git panel in VS Code, a sharing tool in Chrome, a task manager in Terminal. It only appears when it can help.</p></div>
+        <div class="card"><div class="ico">🧭</div><h3>Dev glance</h3><p>Listening ports with open and kill. Your open GitHub PRs with CI status and review state.</p></div>
+        <div class="card"><div class="ico">📊</div><h3>Claude usage</h3><p>Tokens in the current 5-hour window and when it resets, with an optional budget bar.</p></div>
+        <div class="card"><div class="ico">☕</div><h3>Stays awake for you</h3><p>Keeps the display awake while agents or tasks run, then lets it sleep.</p></div>
+      </div>
+      <p class="sub" style="margin:28px 0 0">And yes, the basics too: now playing, next meeting with one-click Join, timer and Pomodoro, File Shelf with AirDrop, battery and Bluetooth alerts, mic and camera dots with All Mute.</p>
+    </div>
+  </section>
+
+  <section id="apps">
+    <div class="wrap">
+      <h2>It changes with the app you're in</h2>
+      <p class="sub">Open the notch over a different app and you get different tools.</p>
+      <div class="apps">
+        <div class="app"><b>VS Code / Cursor</b><span>Branch and changes, an AI-written commit message (never commits without your click), stash dashboard, undo commit, a git guide filled in with your repo's names, run tests, this project's dev servers.</span></div>
+        <div class="app"><b>Chrome / Brave / Safari</b><span>localhost → phone QR, Share publicly with a live link, window size presets, clean and Markdown links, GitHub PR and issue helpers.</span></div>
+        <div class="app"><b>Terminal</b><span>Live tasks with Stop, recent tasks to copy or re-run, your last 15 commands with secret-looking lines hidden.</span></div>
+        <div class="app"><b>Finder</b><span>Copy absolute or git-relative paths, open Terminal here, images → PDF.</span></div>
+        <div class="app"><b>Preview &amp; Figma</b><span>Drag PDFs onto the notch to merge them. Pick colours from the screen in Figma.</span></div>
+        <div class="app"><b>Any app</b><span>Add your own buttons that run shell commands as tracked tasks.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap two">
+      <div>
+        <h2>One command for long tasks</h2>
+        <p class="sub">Output stays in your terminal. The notch shows elapsed time, then ✓ or ✗ with a chime. Any tool can report in as an agent.</p>
+      </div>
+<pre><span class="c"># watch anything</span>
+islet run npm test
+islet run swift build -c release
+
+<span class="c"># report from any agent or script</span>
+islet agent waiting --name "My Agent" \
+  --project api --message "Approve deploy?"</pre>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Light by design</h2>
+      <p class="sub">Heavy work runs in short-lived helper processes. Nothing polls while the notch is closed.</p>
+      <div class="stats">
+        <div class="stat"><b>~25 MB</b><span>RAM in normal use</span></div>
+        <div class="stat"><b>0 %</b><span>CPU when idle</span></div>
+        <div class="stat"><b>~2.5 MB</b><span>download</span></div>
+        <div class="stat"><b>0</b><span>accounts, trackers, servers</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Keyboard all the way</h2>
+      <p class="sub">Hover the notch, or double-tap Control to open it with keyboard focus.</p>
+      <div class="keys">
+        <div><span>Open / close</span><span><kbd>⌃</kbd> <kbd>⌃</kbd></span></div>
+        <div><span>Switch tabs</span><span><kbd>⌘1</kbd>–<kbd>⌘6</kbd></span></div>
+        <div><span>Jump to waiting agent</span><kbd>J</kbd></div>
+        <div><span>Mute mic everywhere</span><kbd>M</kbd></div>
+        <div><span>Timer / focus</span><kbd>⌘T</kbd></div>
+        <div><span>All shortcuts</span><kbd>?</kbd></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap two">
+      <div>
+        <h2>Install in a minute</h2>
+        <p class="sub">Islet isn't notarized yet, so macOS asks you to confirm it once.</p>
+        <a class="btn primary" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download Islet.dmg</a>
+        <p class="fine" style="text-align:left">Requires a Mac with Apple silicon (M1 or later) and macOS 14 Sonoma or later. <a href="https://github.com/YashTygi/islet#build-from-source">Build from source</a>.</p>
+      </div>
+      <ol class="steps">
+        <li><b>Open the DMG</b> and drag Islet to Applications.</li>
+        <li><b>Open Islet.</b> If macOS blocks it: System Settings → Privacy &amp; Security → <b>Open Anyway</b>.</li>
+        <li><b>Follow setup:</b> Accessibility for the shortcut, connect Claude Code, install the <code>islet</code> command, and optionally sign in to GitHub.</li>
+        <li><b>Hover the notch.</b> That's it.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Your notch, finally working for you.</h2>
+      <p class="sub" style="margin:0 auto 26px">Free, open source and private. Runs entirely on your Mac.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download for Mac</a>
+        <a class="btn" href="https://github.com/YashTygi/islet">View source</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Islet · MIT License · by <a href="https://github.com/YashTygi">Yash Tyagi</a></span>
+    <span><a href="https://github.com/YashTygi/islet/issues">Issues</a> · <a href="https://github.com/YashTygi/islet/releases">Releases</a> · Screenshots use demo data.</span>
+  </div>
+</footer>
+
+<script>
+  const tabs = document.querySelectorAll('.tab'), shot = document.getElementById('shot'), cap = document.getElementById('cap');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.setAttribute('aria-selected', x === t));
+    shot.style.opacity = 0;
+    setTimeout(() => { shot.src = 'assets/' + t.dataset.img; shot.alt = t.textContent; cap.innerHTML = t.dataset.cap; shot.style.opacity = 1; }, 180);
+  }));
+</script>
+</body>
+</html>

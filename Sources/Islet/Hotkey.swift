@@ -70,7 +70,7 @@ struct DoubleTapDetector {
 enum Shortcuts {
     static let list: [(keys: String, action: String)] = [
         ("⌃ ⌃", "Open / close the notch (locked)"),
-        ("⌘1 … ⌘4", "Switch tab, in order"),
+        ("⌘1 … ⌘6", "Switch tab, in order"),
         ("← →", "Previous / next tab"),
         ("⌘,", "Control panel"),
         ("⌘T", "Timer  ·  then 1–6 presets, F focus, X cancel"),

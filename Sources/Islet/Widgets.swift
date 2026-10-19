@@ -76,7 +76,7 @@ final class Prefs {
 
     init() {
         let d = UserDefaults.standard
-        hiddenTabs = Set((d.stringArray(forKey: "hiddenTabs") ?? []).compactMap(NotchTab.init))
+        hiddenTabs = Set((d.stringArray(forKey: "hiddenTabs") ?? [NotchTab.camera.rawValue]).compactMap(NotchTab.init))  // Camera is opt-in (Control panel → Notch)
         homeCards = d.stringArray(forKey: "homeCards")?.compactMap(HomeCard.init) ?? HomeCard.allCases
         disabledActivities = Set((d.stringArray(forKey: "disabledActivities") ?? []).compactMap(ActivityKind.init))
         sounds = d.object(forKey: "sounds") as? Bool ?? true

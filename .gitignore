@@ -1,9 +1,14 @@
+.DS_Store
 .build/
 build/
-.DS_Store
-build/
+dist/
 DerivedData/
 *.xcuserstate
 xcuserdata/
-.build/
-dist/
+.vscode/
+
+# Internal notes and launch material (not part of the public repo)
+ISLET_JOURNEY.md
+BRAG_PROMPT.md
+demo/
+brag-output*/

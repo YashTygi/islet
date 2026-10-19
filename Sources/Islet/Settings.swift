@@ -155,12 +155,14 @@ private struct NotchPage: View {
 
     var body: some View {
         Form {
-            Section("Tabs") {
+            Section {
                 ForEach(NotchTab.allCases.filter { $0 != .home }) { t in
                     Toggle(isOn: bind({ !prefs.hiddenTabs.contains(t) }) { on in
                         if on { prefs.hiddenTabs.remove(t) } else { prefs.hiddenTabs.insert(t) }
                     }) { Label(t.title, systemImage: t.symbol) }
                 }
+            } header: { Text("Tabs") } footer: {
+                Text("Camera (mirror + ring light) is off by default. Turn it on here.").foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Open to the App tab when the front app has actions", isOn: bind({ prefs.openToAppTab }) { prefs.openToAppTab = $0 })

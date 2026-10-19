@@ -84,6 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let f = ProcessInfo.processInfo.environment["ISLET_TEST_AIRDROP"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { AirDrop.send([URL(fileURLWithPath: f)]) }  // dev hook
         }
+        if let tab = ProcessInfo.processInfo.environment["ISLET_TEST_OPEN"].flatMap(NotchTab.init(rawValue:)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in  // dev hook: open locked on a tab (screenshots)
+                self?.controllers.first?.toggleLock()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { self?.controllers.first?.model.select(tab) }
+            }
+        }
         if let m = ProcessInfo.processInfo.environment["ISLET_TEST_TIMER"].flatMap(Double.init) {
             activities.startTimer(minutes: m)  // dev hook: exercise the timer pill without clicking
         }

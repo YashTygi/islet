@@ -62,11 +62,12 @@ enum Installer {
     }
 }
 
-private enum Step: Int, CaseIterable { case welcome, install, permissions, claude, finish }
+private enum Step: Int, CaseIterable { case welcome, install, permissions, claude, github, finish }
 
 private struct OnboardingView: View {
     let onDone: () -> Void
-    private let step = State(initialValue: Step.welcome)
+    private let step = State(initialValue: ProcessInfo.processInfo.environment["ISLET_ONBOARDING_STEP"]
+        .flatMap(Int.init).flatMap(Step.init(rawValue:)) ?? .welcome)   // dev: jump to a page
     private let tick = State(initialValue: 0)          // re-reads permission/install state
     private let error = State<String?>(initialValue: nil)
     private let calendarGranted = State(initialValue: EKEventStore.authorizationStatus(for: .event) == .fullAccess)
@@ -80,6 +81,7 @@ private struct OnboardingView: View {
                 case .install: install
                 case .permissions: permissions
                 case .claude: claude
+                case .github: GitHubStep()
                 case .finish: finish
                 }
             }
@@ -235,6 +237,56 @@ private struct OnboardingView: View {
             } else {
                 Button(action, action: perform)
             }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary.opacity(0.5)))
+    }
+}
+
+/// Optional: GitHub CLI install + browser sign-in for the Dev tab's PRs & CI. Each step opens Terminal for
+/// the one thing that needs the person (Homebrew install or the device-code sign-in).
+private struct GitHubStep: View {
+    private let status = State<GitHub.Status?>(initialValue: nil)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.pull").font(.system(size: 34)).foregroundStyle(Color.accentColor)
+                Text("GitHub (optional)").font(.title.weight(.semibold))
+            }.frame(maxWidth: .infinity)
+            Text("See your open pull requests and their CI status in the notch's Dev tab.").foregroundStyle(.secondary)
+            row("1. GitHub CLI",
+                GitHub.hasHomebrew ? "Installs GitHub's official `gh` tool with Homebrew in a Terminal window."
+                                   : "Opens GitHub's download page. Run the installer, then come back here.",
+                done: status.wrappedValue.map { $0 != .missing } ?? false,
+                action: GitHub.hasHomebrew ? "Install" : "Download", enabled: true) { GitHub.install() }
+            row("2. Sign in", "Opens Terminal and your browser to sign in. Your token stays in the Keychain; Islet never sees it.",
+                done: { if case .ready = status.wrappedValue { true } else { false } }(),
+                action: "Sign in", enabled: status.wrappedValue == .signedOut) { GitHub.signIn() }
+            if case .ready(let user) = status.wrappedValue {
+                Label("Connected as @\(user)", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+            } else {
+                Text("Don't use GitHub? Just continue. You can set this up later from the Dev tab.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                status.wrappedValue = await GitHub.status()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    private func row(_ title: String, _ detail: String, done: Bool, action: String, enabled: Bool,
+                     perform: @escaping () -> Void) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline)
+                Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            if done { Label("Done", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
+            else { Button(action, action: perform).disabled(!enabled) }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary.opacity(0.5)))
