@@ -273,6 +273,20 @@ code{font:500 .88em var(--mono);color:var(--ink);background:var(--mist);padding:
 .dmg-steps{max-width:560px;margin:22px auto 0;text-align:left;font-size:14px;color:var(--ink-2)}
 .dmg-steps summary{cursor:pointer;font-weight:600;color:var(--ink)}
 .dmg-steps ol{margin:10px 0 0;padding-left:20px;line-height:1.6}
+dialog.gk{max-width:620px;width:calc(100% - 32px);max-height:calc(100vh - 32px);padding:0;border:1px solid var(--line-2);border-radius:20px;background:var(--paper);color:var(--ink);box-shadow:0 30px 80px rgba(11,14,22,.3)}
+dialog.gk::backdrop{background:rgba(11,14,22,.45);backdrop-filter:blur(3px)}
+.gk-in{padding:28px 28px 24px;overflow:auto}
+.gk h3{margin:0 0 6px;font-size:24px;letter-spacing:-.02em}
+.gk .why{margin:0 0 18px;color:var(--muted);font-size:14.5px;line-height:1.5}
+.gk ol{margin:0;padding-left:22px;font-size:15px;line-height:1.55}
+.gk li{margin:0 0 14px}
+.gk li img{display:block;width:250px;max-width:100%;margin:10px 0 2px;border-radius:14px}
+.gk .mock{margin:10px 0 2px;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:13px;color:var(--ink-2);display:flex;gap:12px;align-items:center;justify-content:space-between}
+.gk .mock b{font-weight:600}
+.gk .mock span.b{flex:none;padding:5px 12px;border-radius:7px;background:#e8e8ed;border:1px solid #d2d2d7;font-weight:600;color:#1d1d1f}
+.gk .skip{margin:6px 0 18px;padding:14px;border-radius:12px;background:var(--mist);font-size:14px}
+.gk .skip .install{margin:8px 0 0}
+.gk .acts{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .final{text-align:center;padding:110px 0 90px;background:linear-gradient(var(--paper),var(--mist) 60%,var(--sky));border-top:1px solid var(--line)}
 .final h2{font-size:clamp(36px,5vw,64px);letter-spacing:-.05em;line-height:1;margin:22px auto 14px;max-width:16ch}
 .final p{color:var(--muted);margin:0 auto 28px;max-width:46ch}
@@ -559,7 +573,7 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
       <details id="q-privacy"><summary>What does Islet collect?</summary><p>Nothing. There's no account, analytics or server. The keyboard shortcut reads only the Control key. A public tunnel runs only when you click Share publicly, and shows a LIVE pill the whole time.</p></details>
       <details id="q-notch"><summary>Does it work on Macs or monitors without a notch?</summary><p>Yes. Screens without a notch get a slim black pill at the top centre that behaves the same way, on every display.</p></details>
       <details id="q-license"><summary>Is it open source?</summary><p>It's source-available under MIT + Commons Clause. You can use it at home or at work, read and change the code, and fork it with credit. What isn't allowed is selling Islet or a product built mainly from its code.</p></details>
-      <details id="q-uninstall"><summary>How do I uninstall it?</summary><p>Remove the Claude Code hooks in Control panel → Agents, quit Islet, and move it to the Trash. Optionally delete <code>~/Library/Application Support/Islet</code>.</p></details>
+      <details id="q-uninstall"><summary>How do I uninstall it?</summary><p>Paste this into Terminal: <code>curl -fsSL https://yashtygi.github.io/islet/uninstall.sh | sh</code>. It quits Islet and removes the app, the <code>islet</code> command, its Claude Code hooks and Codex line, settings, data and its privacy permissions. Everything goes to the Trash, and edited config files are backed up there first. Read it at <a href="uninstall.sh">uninstall.sh</a>.</p></details>
     </div>
   </div>
 </section>
@@ -576,9 +590,9 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
     </div>
     <details class="dmg-steps rv" open><summary>Using the DMG? macOS will ask once</summary>
       <ol>
-        <li>Open <b>Islet.dmg</b>. If macOS says it can't verify it, click <b>Done</b>.</li>
+        <li>Open <b>Islet.dmg</b>. When macOS says it can't verify it, click <b>Done</b> (not Move to Bin).</li>
         <li>Open <b>System Settings → Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b> next to Islet.</li>
-        <li>Drag Islet to Applications and open it. If asked again, click <b>Open Anyway</b> once more.</li>
+        <li>Open it again and click <b>Open</b>. Then drag Islet to Applications and open it; if asked, repeat once for the app.</li>
       </ol>
       <p style="margin:10px 0 0;color:var(--muted)">This happens because Islet isn't notarized by Apple yet. The Terminal command above skips it.</p>
     </details>
@@ -756,6 +770,37 @@ document.querySelectorAll("button.copy").forEach(b => b.addEventListener("click"
   catch { b.textContent = "Select & copy"; }
   setTimeout(() => { b.textContent = "Copy"; }, 1600);
 }));
+</script>
+<dialog class="gk" id="gk" aria-labelledby="gk-title">
+  <div class="gk-in">
+    <h3 id="gk-title">Opening the DMG: one extra step</h3>
+    <p class="why">Islet is free, so it isn't notarized by Apple (that costs $99 a year). The first time you open it, macOS will stop it once. Here's how to let it through. It takes about 30 seconds.</p>
+    <ol>
+      <li>Open <b>Islet.dmg</b>. macOS shows this. Click <b>Done</b>, <b>not</b> Move to Bin.
+        <img src="assets/gatekeeper-blocked.png" alt="macOS dialog: “Islet.dmg” Not Opened. Apple could not verify “Islet.dmg” is free of malware. Buttons: Done and Move to Bin." width="250" height="243" loading="lazy" /></li>
+      <li>Open <b>Apple menu → System Settings → Privacy &amp; Security</b>. Scroll to the bottom and click <b>Open Anyway</b>, then enter your Mac password.
+        <div class="mock" aria-hidden="true"><span><b>“Islet.dmg”</b> was blocked to protect your Mac.</span><span class="b">Open Anyway</span></div></li>
+      <li>macOS asks one last time. Click <b>Open</b> (or <b>Open Anyway</b>). Never <b>Move to Bin</b>.</li>
+      <li>Drag <b>Islet</b> to Applications and open it. If macOS stops <b>Islet</b> the same way, repeat steps 2–3 once for the app. After that it opens normally, forever.</li>
+    </ol>
+    <div class="skip"><b>Want to skip all of this?</b> Paste this into Terminal instead. It checks the download and installs Islet with no prompts.
+      <div class="install"><code id="cmd-dlg">curl -fsSL https://yashtygi.github.io/islet/install.sh | sh</code><button type="button" class="copy" data-copy="cmd-dlg">Copy</button></div></div>
+    <div class="acts">
+      <button type="button" class="btn lg" id="gk-close">Close</button>
+      <a class="btn primary lg" id="gk-go" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Got it, download Islet.dmg</a>
+    </div>
+  </div>
+</dialog>
+<script>
+// DMG links open the Gatekeeper guide first; its own button does the real download.
+const gk = document.getElementById("gk");
+document.querySelectorAll('a[href$="/Islet.dmg"]').forEach(a => {
+  if (a.id === "gk-go") return;
+  a.addEventListener("click", e => { if (gk.showModal) { e.preventDefault(); gk.showModal(); } });
+});
+document.getElementById("gk-close").addEventListener("click", () => gk.close());
+document.getElementById("gk-go").addEventListener("click", () => setTimeout(() => gk.close(), 400));
+gk.addEventListener("click", e => { if (e.target === gk) gk.close(); });
 </script>
 </body>
 </html>
