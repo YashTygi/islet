@@ -287,6 +287,9 @@ dialog.gk::backdrop{background:rgba(11,14,22,.45);backdrop-filter:blur(3px)}
 .gk .skip{margin:6px 0 18px;padding:14px;border-radius:12px;background:var(--mist);font-size:14px}
 .gk .skip .install{margin:8px 0 0}
 .gk .acts{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.demo-video{position:relative;border-radius:22px;overflow:hidden;border:1px solid var(--line-2);background:#07070a;box-shadow:0 30px 80px rgba(11,14,22,.18);aspect-ratio:16/9}
+.demo-video video{display:block;width:100%;height:100%;object-fit:cover}
+.demo-cap{margin:14px 0 0;font-size:13px;color:var(--muted);text-align:center}
 .final{text-align:center;padding:110px 0 90px;background:linear-gradient(var(--paper),var(--mist) 60%,var(--sky));border-top:1px solid var(--line)}
 .final h2{font-size:clamp(36px,5vw,64px);letter-spacing:-.05em;line-height:1;margin:22px auto 14px;max-width:16ch}
 .final p{color:var(--muted);margin:0 auto 28px;max-width:46ch}
@@ -312,6 +315,7 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
 <header class="top">
   <a class="brand" href="#hero"><img src="assets/icon-256.png" alt=""><span>Islet</span></a>
   <nav class="navnotch" aria-label="Primary">
+    <a href="#demo">Demo</a>
     <a href="#context">Context</a>
     <a href="#flow" class="opt">How it works</a>
     <span class="cam" aria-hidden="true"></span>
@@ -345,6 +349,7 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
           Download for Mac
         </a>
         <a class="btn lg" href="#stage" id="try">Try the notch ↓</a>
+        <a class="btn lg" href="#demo">▶ Watch the demo</a>
       </div>
     </div>
 
@@ -391,6 +396,24 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
     </div>
   </div>
 </div>
+
+<!-- ───────── DEMO ───────── -->
+<section id="demo">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="label k">Demo · 90 seconds</span>
+      <h2>See it change with the app you're in.</h2>
+      <p>VS Code, Chrome, Terminal, your agents, and the basics. Sound on.</p>
+    </div>
+    <div class="demo-video rv">
+      <video controls playsinline preload="none" poster="assets/islet-demo-poster.jpg" width="1920" height="1080" aria-label="Islet demo video, 90 seconds">
+        <source src="assets/islet-demo.mp4" type="video/mp4">
+        Your browser can't play this video. <a href="assets/islet-demo.mp4">Download it</a>.
+      </video>
+    </div>
+    <p class="demo-cap">An animated recreation of Islet's interface with sample data.</p>
+  </div>
+</section>
 
 <!-- ───────── FRICTION ───────── -->
 <section id="why">
