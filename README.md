@@ -165,6 +165,7 @@ A repeatable load test lives in [`tools/loadtest.sh`](tools/loadtest.sh). The Ca
 ## Privacy
 
 - **No account, no login, no analytics, no server.** Everything runs on your Mac.
+- Once a day Islet fetches `islet.yashtyagi.xyz/appcast.xml` to check for updates (Sparkle). Updates install only if signed with the release key.
 - Optional integrations use **your own** `claude` and `gh` CLIs and their own sign-in. Islet never sees your tokens.
 - The keyboard shortcut reads only the Control key. Shell history lines that look like secrets are hidden.
 - A public tunnel runs only when you click **Share publicly**, shows a LIVE pill the whole time, and stops on Stop or quit.

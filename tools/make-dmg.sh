@@ -30,8 +30,9 @@ A short setup opens on first launch: permissions, and connecting Claude Code
 click the gear in the notch → About → Show setup again.
 
 PRIVACY
-Everything stays on your Mac. No accounts, no analytics, no network calls,
-except "Share publicly", which you start yourself.
+Everything stays on your Mac. No accounts, no analytics. The only network calls
+are a daily update check (islet.yashtyagi.xyz) and "Share publicly", which you
+start yourself.
 
 UNINSTALL
 Quit Islet, delete it from Applications. If you connected Claude Code, first

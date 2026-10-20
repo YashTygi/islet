@@ -112,6 +112,7 @@ final class Services {
     let ringLight = RingLight()
     var openSettings: () -> Void = {}
     var openOnboarding: () -> Void = {}
+    var checkForUpdates: () -> Void = {}
 
     init(activities: ActivityCenter, tray: TrayStore) {
         agents = AgentStore(center: activities)

@@ -78,7 +78,7 @@ private struct SettingsView: View {
                 case .notch: NotchPage(prefs: services.prefs)
                 case .actions: ActionsPage(prefs: services.prefs)
                 case .agents: AgentsPage(prefs: services.prefs)
-                case .about: AboutPage(openOnboarding: services.openOnboarding)
+                case .about: AboutPage(openOnboarding: services.openOnboarding, checkForUpdates: services.checkForUpdates)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -507,6 +507,7 @@ enum CLIInstaller {
 
 private struct AboutPage: View {
     let openOnboarding: () -> Void
+    let checkForUpdates: () -> Void
     var body: some View {
         VStack(spacing: 12) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 96, height: 96)
@@ -514,9 +515,12 @@ private struct AboutPage: View {
             Text("Mission control for background work").foregroundStyle(.secondary)
             Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")")
                 .font(.caption).foregroundStyle(.secondary)
-            Text("Everything stays on this Mac. No accounts, no analytics.")
+            Text("Everything stays on this Mac. No accounts, no analytics. Only checks for updates.")
                 .font(.caption).foregroundStyle(.secondary)
-            Button("Show setup again", action: openOnboarding)
+            HStack {
+                Button("Check for Updates…", action: checkForUpdates)
+                Button("Show setup again", action: openOnboarding)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

@@ -2,6 +2,11 @@
 # Builds Islet.app (release) next to this script. Usage: ./build.sh [run]
 set -euo pipefail
 cd "$(dirname "$0")"
+# Bump both for every release: Sparkle compares VERSION_BUILD to decide what's newer.
+VERSION=${VERSION:-1.0.0}
+VERSION_BUILD=${VERSION_BUILD:-1}
+# Public half of the update signing key (private half: login keychain, item "https://sparkle-project.org").
+SPARKLE_KEY=0rhawxWwvazb0tLE1AW1FjhBPVxVJ7PopovvvCBv4vc=
 swift build -c release
 
 # Stable identity so macOS privacy grants (Accessibility, Calendar, Camera) survive rebuilds.
@@ -31,6 +36,13 @@ cp .build/release/IsletCLI "$APP/Contents/Helpers/islet"     # CLI: islet run / 
 cp Assets/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"  # regenerate: swift tools/make-icon.swift
 codesign --force --sign "$SIGN" "$APP/Contents/Helpers/islet"
 cp -R "$FW" "$APP/Contents/Resources/"
+# Sparkle: nested helpers first, then the framework (inside-out signing).
+mkdir -p "$APP/Contents/Frameworks"
+ditto .build/release/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framework"
+SP="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+for f in "$SP/XPCServices/"*.xpc "$SP/Autoupdate" "$SP/Updater.app" "$APP/Contents/Frameworks/Sparkle.framework"; do
+  codesign --force --sign "$SIGN" "$f"
+done
 cp $A/bin/mediaremote-adapter.pl "$APP/Contents/Resources/"
 codesign --force --sign "$SIGN" "$APP/Contents/Resources/MediaRemoteAdapter.framework/MediaRemoteAdapter"
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -41,8 +53,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>Islet</string>
   <key>CFBundleExecutable</key><string>Islet</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$VERSION_BUILD</string>
+  <key>SUFeedURL</key><string>https://islet.yashtyagi.xyz/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>$SPARKLE_KEY</string>
+  <key>SUEnableAutomaticChecks</key><true/>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>

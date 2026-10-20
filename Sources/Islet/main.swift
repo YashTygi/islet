@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -14,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var bluetooth = BluetoothService(center: activities)
     private lazy var calendar = CalendarService(center: activities)
     private let hotkey = HotkeyMonitor()
+    /// Daily check of SUFeedURL (Info.plist); updates must carry our EdDSA signature (SUPublicEDKey).
+    private let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     private let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
     private var dragMonitors: [Any] = []
     private var calendarStarted = false
@@ -41,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         services.openSettings = { [weak self] in self?.settings.show() }
         services.openOnboarding = { [weak self] in self?.onboarding.show() }
+        services.checkForUpdates = { [weak self] in self?.updater.checkForUpdates(nil) }
         services.prefs.onChange = { [weak self] in self?.applyPrefs() }
         applyPrefs()
         events.onAgent = { [weak self] in self?.services.agents.apply($0) }
