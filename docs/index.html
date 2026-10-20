@@ -264,6 +264,15 @@ code{font:500 .88em var(--mono);color:var(--ink);background:var(--mist);padding:
 @media (max-width:900px){.faq-head,.faq-list{grid-column:1/-1}}
 
 /* final + footer */
+.install{display:flex;align-items:center;gap:10px;max-width:560px;margin:0 0 10px;padding:6px 6px 6px 16px;border-radius:12px;background:var(--ink);color:#e9edf6;border:1px solid var(--ink)}
+.install code{flex:1;min-width:0;background:none;color:inherit;padding:0;font-size:13.5px;white-space:nowrap;overflow-x:auto}
+.install button{flex:none;height:36px;padding:0 14px;border-radius:8px;border:0;background:rgba(255,255,255,.14);color:#fff;font:600 13px var(--sans,inherit);cursor:pointer}
+.install button:hover{background:rgba(255,255,255,.24)}
+.install-note{font-size:13px;color:var(--muted);margin:0 0 18px}
+.final .install{margin:0 auto 10px;text-align:left}
+.dmg-steps{max-width:560px;margin:22px auto 0;text-align:left;font-size:14px;color:var(--ink-2)}
+.dmg-steps summary{cursor:pointer;font-weight:600;color:var(--ink)}
+.dmg-steps ol{margin:10px 0 0;padding-left:20px;line-height:1.6}
 .final{text-align:center;padding:110px 0 90px;background:linear-gradient(var(--paper),var(--mist) 60%,var(--sky));border-top:1px solid var(--line)}
 .final h2{font-size:clamp(36px,5vw,64px);letter-spacing:-.05em;line-height:1;margin:22px auto 14px;max-width:16ch}
 .final p{color:var(--muted);margin:0 auto 28px;max-width:46ch}
@@ -300,7 +309,7 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.3 4.8 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"/></svg>
       GitHub
     </a>
-    <a class="btn primary" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download</a>
+    <a class="btn primary" href="#download">Download</a>
   </div>
 </header>
 
@@ -312,8 +321,12 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
       <span class="eyebrow rv"><i></i><span class="label" style="color:var(--ink-2)">macOS notch app · for developers</span></span>
       <h1 class="rv">Run your Mac from the <em>notch.</em></h1>
       <p class="lede rv">Agents stop to ask for approval. Builds finish in another window. PRs sit on CI. <b>Islet puts all of it in the notch</b>, and turns into the right tools for whatever app you're in.</p>
+      <div class="rv">
+        <div class="install"><code id="cmd-hero">curl -fsSL https://yashtygi.github.io/islet/install.sh | sh</code><button type="button" class="copy" data-copy="cmd-hero">Copy</button></div>
+        <p class="install-note">Paste into Terminal. Installs to Applications and opens setup. No security prompts. <a href="#download">Or download the DMG</a>.</p>
+      </div>
       <div class="cta rv">
-        <a class="btn primary lg" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">
+        <a class="btn lg" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.9-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.3.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.8-1-2.8-4.1zM14 5.2c.7-.8 1.2-2 1-3.2-1 .1-2.2.7-3 1.5-.6.7-1.2 1.9-1 3.1 1.1.1 2.3-.6 3-1.4z"/></svg>
           Download for Mac
         </a>
@@ -526,7 +539,7 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
           <tr><th scope="row">Agents</th><td>Claude Code and Codex built in. Any other tool via <code>islet agent</code>.</td><td><a href="#q-agents">Which agents?</a></td></tr>
           <tr><th scope="row">Usage meter</th><td>Claude Code's 5-hour window, read from local logs.</td><td><a href="#q-usage">Why only Claude?</a></td></tr>
           <tr><th scope="row">PRs & CI</th><td>Uses the GitHub CLI; setup installs it and signs you in.</td><td><a href="#q-github">How?</a></td></tr>
-          <tr><th scope="row">First launch</th><td>One-time "Open Anyway" in System Settings (not notarized yet).</td><td><a href="#q-gatekeeper">Why?</a></td></tr>
+          <tr><th scope="row">First launch</th><td>Install with one Terminal command, or use the DMG and click "Open Anyway" once (not notarized yet).</td><td><a href="#q-gatekeeper">Why?</a></td></tr>
           <tr><th scope="row">License</th><td>Use, modify and fork freely with credit. Selling it isn't allowed.</td><td><a href="#q-license">Details</a></td></tr>
         </tbody>
       </table>
@@ -539,7 +552,7 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
   <div class="wrap faq">
     <div class="faq-head rv"><span class="label">07 · FAQ</span><h2 style="font-size:clamp(28px,3.4vw,40px);letter-spacing:-.04em;line-height:1.05;margin:14px 0 0">Questions, answered plainly.</h2></div>
     <div class="faq-list">
-      <details id="q-gatekeeper"><summary>Why does macOS ask me to "Open Anyway"?</summary><p>Islet is signed but not yet notarized by Apple, which needs a paid developer account. The first time you open it, go to System Settings → Privacy &amp; Security and click Open Anyway. You only do this once. The full source is on GitHub if you'd rather build it yourself.</p></details>
+      <details id="q-gatekeeper"><summary>Why does macOS ask me to "Open Anyway"?</summary><p>Islet is signed but not yet notarized by Apple, which needs a paid developer account. The first time you open it, go to System Settings → Privacy &amp; Security and click Open Anyway. You only do this once. To skip it, install from Terminal instead: <code>curl -fsSL https://yashtygi.github.io/islet/install.sh | sh</code>. The script downloads the release from GitHub, checks its SHA-256, copies Islet to Applications and opens it; read it at <a href="install.sh">install.sh</a>. The full source is on GitHub if you'd rather build it yourself.</p></details>
       <details id="q-agents"><summary>Which AI agents does it support?</summary><p>Claude Code connects in one click during setup, and Codex via its <code>notify</code> setting. Anything else (Cursor, Gemini CLI, your own scripts) can report with one line, e.g. <code>islet agent waiting --name "My Agent" --project api</code>. Native hooks for more agents are on the roadmap.</p></details>
       <details id="q-usage"><summary>Why does the usage meter only show Claude?</summary><p>It reads Claude Code's local session logs, so nothing leaves your Mac. Other providers don't keep comparable local logs yet; more meters are on the roadmap.</p></details>
       <details id="q-github"><summary>How do PRs and CI get into the notch?</summary><p>Islet uses GitHub's own <code>gh</code> CLI. Setup installs it (with Homebrew, or GitHub's installer) and opens a browser sign-in. Your token stays in your Keychain, and Islet never sees it.</p></details>
@@ -556,10 +569,19 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
     <div class="bignotch rv" aria-hidden="true"><span class="ok">✓</span><span>ready</span></div>
     <h2 class="rv">Give your notch a job.</h2>
     <p class="rv">Free, source-available and private. About 2.5 MB, set up in a minute.</p>
+    <div class="rv"><div class="install"><code id="cmd-final">curl -fsSL https://yashtygi.github.io/islet/install.sh | sh</code><button type="button" class="copy" data-copy="cmd-final">Copy</button></div><p class="install-note">Easiest: paste into Terminal. It checks the download, installs Islet and opens setup.</p></div>
     <div class="cta rv">
-      <a class="btn primary lg" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download for Mac</a>
+      <a class="btn primary lg" href="https://github.com/YashTygi/islet/releases/latest/download/Islet.dmg">Download the DMG</a>
       <a class="btn lg" href="https://github.com/YashTygi/islet">View on GitHub</a>
     </div>
+    <details class="dmg-steps rv" open><summary>Using the DMG? macOS will ask once</summary>
+      <ol>
+        <li>Open <b>Islet.dmg</b>. If macOS says it can't verify it, click <b>Done</b>.</li>
+        <li>Open <b>System Settings → Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b> next to Islet.</li>
+        <li>Drag Islet to Applications and open it. If asked again, click <b>Open Anyway</b> once more.</li>
+      </ol>
+      <p style="margin:10px 0 0;color:var(--muted)">This happens because Islet isn't notarized by Apple yet. The Terminal command above skips it.</p>
+    </details>
     <p class="label" style="margin-top:18px">Apple silicon · macOS 14+</p>
   </div>
 </div>
@@ -727,6 +749,13 @@ footer a{text-decoration:none;color:var(--ink-2)} footer a:hover{color:var(--ink
   ScrollTrigger.batch('.mod, .basics', {start:'top 90%', once:true,
     onEnter: b => gsap.to(b, {opacity:1, y:0, duration:.5, ease:'power3.out', stagger:.055, overwrite:true})});
 })();
+</script>
+<script>
+document.querySelectorAll("button.copy").forEach(b => b.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(document.getElementById(b.dataset.copy).textContent); b.textContent = "Copied"; }
+  catch { b.textContent = "Select & copy"; }
+  setTimeout(() => { b.textContent = "Copy"; }, 1600);
+}));
 </script>
 </body>
 </html>
