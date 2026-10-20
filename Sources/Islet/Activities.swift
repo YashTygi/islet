@@ -293,19 +293,27 @@ final class BluetoothService: NSObject {
                                                  selector: #selector(connected(_:device:)))
     }
 
-    @objc private func connected(_ note: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+    // IOBluetooth posts these from a CoreBluetooth background queue; only Strings cross to main,
+    // where the window resize happens (AppKit throws if setFrame runs off the main thread).
+    @objc nonisolated private func connected(_ note: IOBluetoothUserNotification, device: IOBluetoothDevice) {
         device.register(forDisconnectNotification: self, selector: #selector(disconnected(_:device:)))
-        debugLog("bluetooth: connected \(device.name ?? "?") (replay=\(Date.now <= quietUntil))")
-        guard Date.now > quietUntil else { return }
-        center.show(.bluetooth(name: device.name ?? "Device", connected: true, symbol: Self.symbol(device)))
+        let name = device.name ?? "Device", symbol = Self.symbol(device)
+        DispatchQueue.main.async { MainActor.assumeIsolated {
+            debugLog("bluetooth: connected \(name) (replay=\(Date.now <= self.quietUntil))")
+            guard Date.now > self.quietUntil else { return }
+            self.center.show(.bluetooth(name: name, connected: true, symbol: symbol))
+        } }
     }
 
-    @objc private func disconnected(_ note: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+    @objc nonisolated private func disconnected(_ note: IOBluetoothUserNotification, device: IOBluetoothDevice) {
         note.unregister()
-        center.show(.bluetooth(name: device.name ?? "Device", connected: false, symbol: Self.symbol(device)))
+        let name = device.name ?? "Device", symbol = Self.symbol(device)
+        DispatchQueue.main.async { MainActor.assumeIsolated {
+            self.center.show(.bluetooth(name: name, connected: false, symbol: symbol))
+        } }
     }
 
-    private static func symbol(_ d: IOBluetoothDevice) -> String {
+    nonisolated private static func symbol(_ d: IOBluetoothDevice) -> String {
         let name = (d.name ?? "").lowercased()
         if name.contains("airpods max") { return "airpodsmax" }
         if name.contains("airpods pro") { return "airpodspro" }
