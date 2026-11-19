@@ -8,6 +8,8 @@ final class NotchModel {
     static let airDropZoneWidth: CGFloat = 130
 
     let notchSize: CGSize
+    /// Floating M1 look: empty space above the pill (0 everywhere else).
+    var topGap: CGFloat = 0
     let media: MediaService
     let tray: TrayStore
     let activities: ActivityCenter
@@ -31,6 +33,8 @@ final class NotchModel {
     private(set) var isExpanded = false
     private(set) var showsActivity: Bool
     var tab: NotchTab = .home
+    /// Text selected when the hotkey opened the nook: the App tab shows tools for it until the nook closes.
+    var selection: SelectedText?
     /// The timer dropdown under the timer chip.
     var timerPanelOpen = false
     /// Keyboard cheat sheet (⌘/).
@@ -140,7 +144,7 @@ final class NotchModel {
     /// The front app has context actions (built in, or your own buttons).
     var hasAppContext: Bool {
         let ctx = services.context
-        return ctx.context.hasActions || services.prefs.customActions.contains { $0.bundleID == ctx.app?.bundleIdentifier }
+        return selection != nil || ctx.context.hasActions || services.prefs.customActions.contains { $0.bundleID == ctx.app?.bundleIdentifier }
     }
 
     /// PDF open in Preview (front app): drops can be merged into it.
@@ -243,6 +247,7 @@ final class NotchModel {
     /// Growing: resize the panel first (layout committed, no animation), spring on the next turn.
     /// Shrinking: spring first, shrink the panel when it settles.
     private func transition(expanded: Bool, activity: Bool) {
+        if !expanded { selection = nil }
         let old = visibleSize, new = size(expanded: expanded, activity: activity)
         generation += 1
         let gen = generation
@@ -352,7 +357,7 @@ struct NotchView: View {
                         removal: .scale(scale: 0.95, anchor: .top).combined(with: .opacity)
                             .animation(.easeOut(duration: 0.08))))
             } else if model.showsActivity, let activity = model.activities.current {
-                ActivityWings(activity: activity, media: model.media.state, height: model.notchSize.height)
+                ActivityWings(activity: activity, media: model.media.state, height: model.notchSize.height, voice: model.services.voice)
                     .padding(.horizontal, NotchModel.earRadius + 8)
                     .frame(height: model.notchSize.height)
                     .contentShape(Rectangle())
@@ -363,6 +368,7 @@ struct NotchView: View {
         .frame(width: size.width, height: size.height)
         // Content can never draw outside the black notch, at any point of the spring.
         .clipShape(NotchShape(earRadius: NotchModel.earRadius, bottomRadius: model.isExpanded ? 32 : 10))
+        .padding(.top, model.topGap)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
@@ -384,7 +390,7 @@ private struct ExpandedContent: View {
                         switch model.currentTab {
                         case .home: HomeView(model: model)
                         case .app: AppTabView(model: model)
-                        case .work: WorkView(agents: s.agents, tasks: s.tasks, downloads: s.downloads, openSettings: s.openSettings)
+                        case .work: WorkView(agents: s.agents, chats: s.chats, tasks: s.tasks, downloads: s.downloads, openSettings: s.openSettings)
                         case .dev: DevView()
                         case .shelf: TrayView(tray: model.tray)
                         case .camera: CameraTabView(model: model)

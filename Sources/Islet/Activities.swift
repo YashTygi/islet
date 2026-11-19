@@ -25,6 +25,7 @@ enum LiveActivity: Equatable {
     case tunnel(url: String)
     case shelved(name: String)
     case working(label: String)
+    case listening
 }
 
 /// Trackpad tap (felt only while a finger rests on a Force Touch trackpad).
@@ -77,6 +78,8 @@ final class ActivityCenter {
     @ObservationIgnored var tunnelURL: String? { didSet { recompute() } }
     /// A Preview/Finder file job is running ("Merging…"): shown until it finishes.
     @ObservationIgnored var working: String? { didSet { recompute() } }
+    /// Hold-to-talk in progress: wave in the collapsed notch.
+    @ObservationIgnored var listening = false { didSet { recompute() } }
     func privacyChanged(mic: Bool, camera: Bool, muted: Bool) {
         self.mic = mic; self.camera = camera; micMuted = muted
         recompute()
@@ -148,6 +151,7 @@ final class ActivityCenter {
         }
         // Candidates in priority order; the first allowed, present one wins.
         var candidates: [(ActivityKind?, LiveActivity?)] = []
+        candidates.append((nil, listening ? LiveActivity.listening : nil))
         candidates.append((.agents, waiting))
         candidates.append((.privacy, mic || camera ? LiveActivity.privacy(mic: mic, camera: camera, muted: micMuted) : nil))
         candidates.append((nil, tunnelURL.map { LiveActivity.tunnel(url: $0) }))
@@ -383,6 +387,7 @@ struct ActivityWings: View {
     let activity: LiveActivity
     let media: NowPlaying
     let height: CGFloat
+    var voice: VoiceInput?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -415,6 +420,7 @@ struct ActivityWings: View {
         case .tunnel: "tunnel"
         case .shelved: "shelved"
         case .working: "working"
+        case .listening: "listening"
         }
     }
 
@@ -457,6 +463,8 @@ struct ActivityWings: View {
             symbol("tray.and.arrow.down.fill", .green).symbolEffect(.bounce, value: activity)
         case .working:
             symbol("doc.badge.gearshape", .blue).symbolEffect(.pulse)  // only for the seconds a job runs
+        case .listening:
+            symbol("mic.fill", .red)
         }
     }
 
@@ -507,6 +515,8 @@ struct ActivityWings: View {
             Image(systemName: "checkmark").foregroundStyle(.green)
         case .working:
             ProgressView().controlSize(.mini).tint(.blue)
+        case .listening:
+            if let voice { VoiceWave(voice: voice) }
         }
     }
 

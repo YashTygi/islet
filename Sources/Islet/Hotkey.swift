@@ -70,6 +70,7 @@ struct DoubleTapDetector {
 enum Shortcuts {
     static let list: [(keys: String, action: String)] = [
         ("⌃ ⌃", "Open / close the notch (locked)"),
+        ("Hold ⌃ ⇧", "Talk: speech to text while held"),
         ("⌘1 … ⌘6", "Switch tab, in order"),
         ("← →", "Previous / next tab"),
         ("⌘,", "Control panel"),
@@ -103,11 +104,16 @@ struct ShortcutsHelp: View {
 }
 
 /// Global double-Control hotkey. Needs Accessibility permission: macOS only delivers other
-/// apps' keyboard events to trusted apps. Only the event type and Control flag are read;
+/// apps' keyboard events to trusted apps. Only the event type and the Control and Shift flags are read;
 /// no key contents are looked at or stored.
 @MainActor
 final class HotkeyMonitor {
     var onDoubleControl: () -> Void = {}
+    /// Hold Control + Shift: talk while held.
+    var onTalkStart: () -> Void = {}
+    var onTalkEnd: () -> Void = {}
+    private var holdTimer: DispatchWorkItem?
+    private var talking = false
     private var detector = DoubleTapDetector()
     private var monitors: [Any] = []
     private static let controlKeyCodes: Set<UInt16> = [59, 62]  // left, right Control
@@ -143,12 +149,31 @@ final class HotkeyMonitor {
     }
 
     private func handle(_ e: NSEvent) {
-        guard e.type == .flagsChanged else { detector.reset(); return }
-        guard Self.controlKeyCodes.contains(e.keyCode) else { detector.reset(); return }
         let flags = e.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
+        // Talk: hold Control + Shift (nothing else). Starts after 0.25 s so ⌃⇧-shortcuts (⌃⇧`, …) don't trigger it;
+        // a key pressed meanwhile means it was a shortcut.
+        if e.type == .keyDown || flags != [.control, .shift] {
+            holdTimer?.cancel()
+            holdTimer = nil
+            if talking { talking = false; onTalkEnd() }
+        } else if !talking, holdTimer == nil {
+            let work = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.holdTimer != nil else { return }
+                    self.holdTimer = nil
+                    self.talking = true
+                    self.onTalkStart()
+                }
+            }
+            holdTimer = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+        }
+        // Open / close: double-tap Control on its own.
+        guard e.type == .flagsChanged, Self.controlKeyCodes.contains(e.keyCode) else { detector.reset(); return }
         let down = flags.contains(.control)
         if detector.control(down: down, alone: !down || flags == [.control], at: e.timestamp) {
             onDoubleControl()
         }
     }
+
 }

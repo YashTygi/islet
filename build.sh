@@ -3,8 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 # Bump both for every release: Sparkle compares VERSION_BUILD to decide what's newer.
-VERSION=${VERSION:-1.0.0}
-VERSION_BUILD=${VERSION_BUILD:-1}
+VERSION=${VERSION:-1.0.1}
+VERSION_BUILD=${VERSION_BUILD:-2}
 # Public half of the update signing key (private half: login keychain, item "https://sparkle-project.org").
 SPARKLE_KEY=0rhawxWwvazb0tLE1AW1FjhBPVxVJ7PopovvvCBv4vc=
 swift build -c release
@@ -63,6 +63,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSAppleEventsUsageDescription</key><string>Reads the current browser tab so the notch can offer actions for it.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Hold Control + Shift to talk: turns what you say into text.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Turns what you say into text, on this Mac when your language supports it.</string>
   <key>NSCameraUsageDescription</key><string>Shows your camera in the notch (Camera tab).</string>
   <key>NSCalendarsFullAccessUsageDescription</key><string>Shows your next event in the notch.</string>
   <key>NSBluetoothAlwaysUsageDescription</key><string>Shows when Bluetooth devices connect or disconnect.</string>

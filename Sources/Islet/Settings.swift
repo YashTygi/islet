@@ -125,6 +125,35 @@ private struct GeneralPage: View {
                 Text("Needed only for the Control hotkey. Islet reads the Control key state, never what you type.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section {
+                TextEditor(text: bind({ prefs.voiceDictionary }) { prefs.voiceDictionary = $0 })
+                    .font(.system(.body, design: .monospaced))
+                    .frame(minHeight: 70)
+            } header: {
+                Text("Dictation words (hold Control + Shift to talk)")
+            } footer: {
+                Text("One per line. A name on its own helps it be recognized. \"whisker flow, whiskey flow = Wispr Flow\" also replaces what it mishears.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                if prefs.voiceLearned.isEmpty {
+                    Text("None yet. Fix a dictated word in the text box and Islet remembers the pair.").foregroundStyle(.secondary)
+                }
+                ForEach(prefs.voiceLearned.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }, id: \.key) { k, n in
+                    HStack {
+                        Text(k.replacingOccurrences(of: ">", with: "  →  "))
+                        Spacer()
+                        Text("×\(n)").foregroundStyle(.secondary)
+                        Button { prefs.voiceLearned[k] = nil } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.borderless).help("Forget this correction")
+                    }
+                }
+            } header: {
+                Text("Learned corrections")
+            } footer: {
+                Text("Used only when the recognizer is unsure and offers the corrected word itself. Only the word pairs are stored.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Keyboard (after double-tapping Control)") {
                 ForEach(Shortcuts.list, id: \.keys) { s in
                     LabeledContent(s.action) { Text(s.keys).font(.system(.body, design: .rounded).weight(.semibold)) }
@@ -163,6 +192,18 @@ private struct NotchPage: View {
                 }
             } header: { Text("Tabs") } footer: {
                 Text("Camera (mirror + ring light) is off by default. Turn it on here.").foregroundStyle(.secondary)
+            }
+            Section {
+                Picker("Notch style", selection: bind({ prefs.floatingNotch }) { prefs.floatingNotch = $0 }) {
+                    Text("Classic").tag(false)
+                    Text("Floating").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .disabled(NSScreen.screens.allSatisfy { $0.safeAreaInsets.top > 0 })
+                Toggle("Hide the notch over full-screen apps and videos", isOn: bind({ prefs.hideInFullScreen }) { prefs.hideInFullScreen = $0 })
+            } header: { Text("Appearance") } footer: {
+                Text("Style applies to screens without a notch (like M1 MacBook Air and 13\" Pro): Classic sits flush with the top edge, Floating leaves a small gap. Full-screen hiding covers YouTube, Netflix and any app in full screen.")
+                    .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Open to the App tab when the front app has actions", isOn: bind({ prefs.openToAppTab }) { prefs.openToAppTab = $0 })
@@ -292,12 +333,22 @@ private struct AgentsPage: View {
                         Button("Install") { run { try CLIInstaller.install() } }
                     }
                 }
+                LabeledContent("Shell hook") {
+                    if ShellHook.isInstalled {
+                        HStack {
+                            Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                            Button("Remove") { run(ShellHook.uninstall) }
+                        }
+                    } else {
+                        Button("Add to ~/.zshrc") { run(ShellHook.install) }
+                    }
+                }
                 Text("islet run npm test        # watch any long task\nislet agent waiting --name Cursor   # report from any tool")
                     .font(.system(size: 11, design: .monospaced)).textSelection(.enabled).foregroundStyle(.secondary)
             } header: {
                 Text("Long tasks & other agents")
             } footer: {
-                Text("Codex: add  notify = [\"\(ClaudeHooks.cliPath)\", \"hook\", \"codex\"]  to ~/.codex/config.toml.")
+                Text("Shell hook: remembers each command's folder, exit code and duration (stored on this Mac only; commands starting with a space and secret-looking ones are skipped). Open a new terminal after adding it.\nCodex: add  notify = [\"\(ClaudeHooks.cliPath)\", \"hook\", \"codex\"]  to ~/.codex/config.toml.")
                     .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
             Section {
@@ -316,6 +367,36 @@ private struct AgentsPage: View {
     private func run(_ action: () throws -> Void) {
         do { try action(); error.wrappedValue = nil } catch { self.error.wrappedValue = error.localizedDescription }
         tick.wrappedValue += 1
+    }
+}
+
+/// The zsh hook line in ~/.zshrc: logs each command's folder, exit code and duration for Islet.
+enum ShellHook {
+    static var zshrc: URL { CLIInstaller.zshrc }
+    static let marker = "# Added by Islet: logs commands (folder, exit code) for the notch. Remove both lines to stop."
+    static var line: String { "eval \"$('\(ClaudeHooks.cliPath)' shell-init zsh)\"" }
+
+    static var isInstalled: Bool { ((try? String(contentsOf: zshrc, encoding: .utf8)) ?? "").contains("shell-init zsh") }
+
+    static func install() throws {
+        guard !isInstalled else { return }
+        let current = (try? String(contentsOf: zshrc, encoding: .utf8)) ?? ""
+        let add = (current.isEmpty || current.hasSuffix("\n") ? "" : "\n") + "\n\(marker)\n\(line)\n"
+        if FileManager.default.fileExists(atPath: zshrc.path) {
+            let h = try FileHandle(forWritingTo: zshrc)
+            defer { try? h.close() }
+            try h.seekToEnd()
+            try h.write(contentsOf: Data(add.utf8))
+        } else {
+            try add.write(to: zshrc, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Removes our two lines only.
+    static func uninstall() throws {
+        guard let current = try? String(contentsOf: zshrc, encoding: .utf8) else { return }
+        let kept = current.components(separatedBy: "\n").filter { $0 != marker && !$0.contains("shell-init zsh)\"") }
+        try kept.joined(separator: "\n").write(to: zshrc, atomically: true, encoding: .utf8)
     }
 }
 

@@ -71,6 +71,11 @@ enum Browser {
 
     static func openPrivate(_ url: String, in app: NSRunningApplication?) async {
         guard let name = app?.localizedName, !isSafari(app) else { return }
+        await openPrivate(url, appName: name)
+    }
+
+    /// Chrome / Brave by name (launches it if needed). Safari has no scriptable private window.
+    static func openPrivate(_ url: String, appName name: String) async {
         await script("""
         tell application "\(name)"
           set w to make new window with properties {mode:"incognito"}
@@ -93,9 +98,18 @@ enum Browser {
     ]
 
     /// Resizes the front browser window (keeps its top-left; height capped to the screen).
+    /// Accessibility first: in-process, instant. AppleScript (a separate osascript process plus two Apple
+    /// Events to a busy browser: ~0.3–1 s) only if Accessibility isn't granted.
     static func resize(_ app: NSRunningApplication?, width: Int, height: Int) async {
-        guard let name = app?.localizedName else { return }
+        guard let app, let name = app.localizedName else { return }
         let maxH = Int(NSScreen.main?.visibleFrame.height ?? 900)
+        var size = CGSize(width: width, height: min(height, maxH))
+        var win: CFTypeRef?
+        if AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXFocusedWindowAttribute as CFString, &win) == .success,
+           let value = AXValueCreate(.cgSize, &size),
+           AXUIElementSetAttributeValue(win as! AXUIElement, kAXSizeAttribute as CFString, value) == .success {  // swiftlint:disable:this force_cast
+            return  // size only: top-left stays put
+        }
         await script("""
         tell application "\(name)"
           set b to bounds of front window

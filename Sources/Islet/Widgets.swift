@@ -65,6 +65,10 @@ final class Prefs {
     var autoShelf: Bool { didSet { d.set(autoShelf, forKey: "autoShelf"); onChange() } }
     /// Open straight to the App tab when the front app has context actions.
     var openToAppTab: Bool { didSet { d.set(openToAppTab, forKey: "openToAppTab"); onChange() } }
+    /// Hide the notch while a full-screen app or video (YouTube, Netflix…) is in front.
+    var hideInFullScreen: Bool { didSet { d.set(hideInFullScreen, forKey: "hideInFullScreen"); onChange() } }
+    /// Floating pill with a gap under the top edge, vs. classic flush pill (screens without a notch only).
+    var floatingNotch: Bool { didSet { d.set(floatingNotch, forKey: "floatingNotch"); onChange() } }
     var ringLight: Bool { didSet { d.set(ringLight, forKey: "ringLight"); onChange() } }
     var ringIntensity: Double { didSet { d.set(ringIntensity, forKey: "ringIntensity"); onChange() } }
     var ringWarmth: Double { didSet { d.set(ringWarmth, forKey: "ringWarmth"); onChange() } }
@@ -73,6 +77,10 @@ final class Prefs {
     }
     /// Optional per-window token budget for the usage bar (0 = show time elapsed instead).
     var claudeTokenLimit: Int { didSet { d.set(claudeTokenLimit, forKey: "claudeTokenLimit"); onChange() } }
+    /// Dictation word list (see VoiceCleanup). Read fresh at each dictation, so no onChange.
+    var voiceDictionary: String { didSet { d.set(voiceDictionary, forKey: VoiceCleanup.defaultsKey) } }
+    /// Fixes you've made to dictated words, "heard>meant": count (CorrectionLearner).
+    var voiceLearned: [String: Int] { didSet { d.set(voiceLearned, forKey: VoiceCleanup.learnedKey) } }
 
     init() {
         let d = UserDefaults.standard
@@ -85,11 +93,15 @@ final class Prefs {
         keepAwake = d.object(forKey: "keepAwake") as? Bool ?? true
         autoShelf = d.bool(forKey: "autoShelf")
         openToAppTab = d.object(forKey: "openToAppTab") as? Bool ?? true
+        hideInFullScreen = d.object(forKey: "hideInFullScreen") as? Bool ?? true
+        floatingNotch = NotchGeometry.floating
         ringLight = d.object(forKey: "ringLight") as? Bool ?? true
         ringIntensity = d.object(forKey: "ringIntensity") as? Double ?? 0.8
         ringWarmth = d.object(forKey: "ringWarmth") as? Double ?? 0.3
         customActions = (d.data(forKey: "customActions")).flatMap { try? JSONDecoder().decode([CustomAction].self, from: $0) } ?? []
         claudeTokenLimit = d.integer(forKey: "claudeTokenLimit")
+        voiceDictionary = d.string(forKey: VoiceCleanup.defaultsKey) ?? VoiceCleanup.starter
+        voiceLearned = d.dictionary(forKey: VoiceCleanup.learnedKey) as? [String: Int] ?? [:]
     }
 
     var visibleTabs: [NotchTab] { NotchTab.allCases.filter { $0 == .home || !hiddenTabs.contains($0) } }
@@ -102,6 +114,10 @@ final class Prefs {
 final class Services {
     let prefs = Prefs()
     let agents: AgentStore
+    let chats: ChatWatcher
+    let exporter = ChatExporter()
+    let voice = VoiceInput()
+    lazy var bubble = VoiceBubble(voice: voice)
     let tasks: TaskStore
     let usage = UsageService()
     let downloads: DownloadWatcher
@@ -116,6 +132,7 @@ final class Services {
 
     init(activities: ActivityCenter, tray: TrayStore) {
         agents = AgentStore(center: activities)
+        chats = ChatWatcher(agents: agents)
         tasks = TaskStore(center: activities)
         downloads = DownloadWatcher(center: activities, tray: tray)
     }

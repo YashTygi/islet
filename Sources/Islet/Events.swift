@@ -199,7 +199,7 @@ final class TaskStore {
         DispatchQueue.global().asyncAfter(deadline: .now() + 3) { if Darwin.kill(t.pid, 0) == 0 { Darwin.kill(t.pid, SIGTERM) } }
     }
 
-    /// Run a finished command again in its folder, in the background (shown as a task with a chime).
+    /// Run a finished command again in its folder, in a visible terminal (shown as a task with a chime).
     func rerun(_ t: FinishedTask) {
         let dir = t.cwd.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.path : t.cwd
         shell(t.command, cwd: dir, project: t.project, tasks: self)
@@ -247,6 +247,7 @@ final class TaskStore {
 
 struct WorkView: View {
     let agents: AgentStore
+    let chats: ChatWatcher
     let tasks: TaskStore
     let downloads: DownloadWatcher
     let openSettings: () -> Void
@@ -265,6 +266,9 @@ struct WorkView: View {
                     }
                 }
                 ForEach(agents.agents) { a in AgentRow(agent: a, dismiss: { agents.dismiss(a.id) }) }
+                if let b = chats.blockedBrowser {
+                    hint("To watch Claude, ChatGPT and Gemini tabs: \(b) → View → Developer → Allow JavaScript from Apple Events")
+                }
             }
             column("Tasks", symbol: "terminal", clear: clearTasks) {
                 if tasks.running.isEmpty && tasks.finished.isEmpty && downloads.items.isEmpty { hint("Prefix a command with `islet run` to watch it here") }
@@ -334,7 +338,7 @@ private struct AgentRow: View {
     let dismiss: () -> Void
 
     var body: some View {
-        Button { jump(toApp: agent.hostApp) } label: {
+        Button { agent.id.hasPrefix(ChatWatcher.idPrefix) ? ChatWatcher.focus(agent.id) : jump(toApp: agent.hostApp) } label: {
             HStack(spacing: 7) {
                 Image(systemName: agent.state.symbol).foregroundStyle(agent.state.color).frame(width: 14)
                 VStack(alignment: .leading, spacing: 0) {

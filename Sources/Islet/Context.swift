@@ -40,6 +40,8 @@ final class ContextService {
     private(set) var context: AppContext = .none
     private(set) var app: NSRunningApplication?
     private(set) var icon: NSImage?
+    /// Last project seen in VS Code / Cursor: where ticket branches and agents go from the browser.
+    @ObservationIgnored var lastProject: String?
     /// Figma eyedropper history (hex), newest first.
     private(set) var colors: [String] = UserDefaults.standard.stringArray(forKey: "pickedColors") ?? []
 
@@ -304,16 +306,18 @@ struct AppTabView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 if let icon = ctx.icon { Image(nsImage: icon).resizable().frame(width: 18, height: 18) }
-                Text(header(ctx.context)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                Text(model.selection.map { "Selection · " + ($0.findings.first?.kind ?? "") } ?? header(ctx.context)).font(.system(size: 12, weight: .semibold)).lineLimit(1)
                 if let f = flash.wrappedValue {
                     Text(f).font(.system(size: 10, weight: .medium)).foregroundStyle(.green).transition(.opacity)
                 }
                 Spacer()
             }
             Group {
+                if let sel = model.selection { SelectionPanel(model: model, sel: sel, done: done) } else {
                 switch ctx.context {
                 case .code: codePanel
-                case .browser: browserPanel
+                case .browser:
+                    if let site = AIChatSite.match(url.wrappedValue) { aiChatPanel(site) } else { browserPanel }
                 case .figma: figmaPanel
                 case .claude: claudePanel
                 case .terminal: TerminalPanel(model: model)
@@ -322,8 +326,10 @@ struct AppTabView: View {
                     if let f = ctx.previewFile { PreviewPanel(model: model, file: f).id(f) }
                 case .other, .none: customPanel
                 }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .clipped()
         }
         .task(id: ctx.app?.processIdentifier) {
             // Refresh while this tab is visible; cancelled when it isn't.
@@ -337,7 +343,10 @@ struct AppTabView: View {
     private func header(_ c: AppContext) -> String {
         switch c {
         case .code: project.wrappedValue.map { "\($0.name)" } ?? "VS Code"
-        case .browser(let app): title.wrappedValue ?? app
+        case .browser(let app):
+            if let site = AIChatSite.match(url.wrappedValue) {
+                "\(site.name) · \(ChatWatcher.site(host: site.host, title: title.wrappedValue ?? "").1)"
+            } else { title.wrappedValue ?? app }
         case .figma: "Figma"
         case .claude(let app): app
         case .terminal(let app): app
@@ -352,6 +361,7 @@ struct AppTabView: View {
         switch ctx.context {
         case .code:
             project.wrappedValue = ctx.codeProject()
+            if let p = project.wrappedValue?.path { ctx.lastProject = p }
             if let path = project.wrappedValue?.path {
                 git.wrappedValue = await GitStatus.read(path)
                 ports.wrappedValue = await projectPorts(path)
@@ -446,8 +456,21 @@ struct AppTabView: View {
                     row("Open in") {
                         ForEach(others, id: \.id) { b in chip(b.name, "arrow.up.forward.app") { Browser.open(u, inBrowserAt: b.path) } }
                         if !Browser.isSafari(ctx.app) { chip("Private", "eye.slash") { Task { await Browser.openPrivate(u, in: ctx.app) } } }
+                        chip("iPhone", "iphone") { if let p = URL(string: publicURL(for: u) ?? lan ?? u) { AirDrop.send([p]) } }
                     }
-                    if let gh = Browser.github(u) { githubRow(gh, pageTitle: pageTitle) }
+                    if let gh = Browser.github(u) {
+                        githubRow(gh, pageTitle: pageTitle)
+                        switch gh {
+                        case .pull(let o, let r, let n): PRCard(owner: o, name: r, number: n, model: model, done: done)
+                        case .repo(let o, let r), .issue(let o, let r, _): GitHubRepoCard(owner: o, name: r)
+                        }
+                    }
+                    if let t = PageTools.ticket(url: u, pageTitle: pageTitle) { ticketRow(t) }
+                    if PageTools.isDocs(u) {
+                        row("Docs") {
+                            chip("Ask about this page", "sparkles") { askAboutPage(url: u, title: pageTitle) }
+                        }
+                    }
                     if host == "meet.google.com" {
                         row("Meet") {
                             chip("Mute / unmute", "mic.slash.fill") { ctx.sendShortcut(2) }       // ⌘D
@@ -505,6 +528,57 @@ struct AppTabView: View {
                 }
                 chip("Copy #\(n) title", "number") { copyToClipboard("#\(n) \(Browser.githubTitle(pageTitle))"); done("Copied") }
             }
+        }
+    }
+
+    /// Ticket (GitHub issue, Linear, Jira): branch name, create it in the project, or hand it to an agent.
+    @ViewBuilder private func ticketRow(_ t: Ticket) -> some View {
+        let project = t.repo.flatMap { PageTools.localClone(owner: $0.owner, name: $0.name) } ?? model.services.context.lastProject
+        let name = project.map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""
+        row("Ticket") {
+            chip("Copy branch", "arrow.triangle.branch") { copyToClipboard(t.branch); done(t.branch) }
+            if let project {
+                chip("Create in \(name)", "plus") {
+                    shell("git switch -c \(PageTools.shq(t.branch))", cwd: project, project: name, tasks: model.services.tasks)
+                    done("Creating \(t.branch)")
+                }
+                chip("Start agent", "sparkles") { startTicketAgent(t, project: project) }
+            }
+        }
+        if project == nil {
+            Text("Open the project in VS Code once to create branches or start an agent from here.")
+                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.45))
+        }
+    }
+
+    private func startTicketAgent(_ t: Ticket, project: String) {
+        let name = URL(fileURLWithPath: project).lastPathComponent
+        let browser = model.services.context.app?.localizedName ?? "Google Chrome"
+        Task {
+            var prompt = "Work on \(t.source) ticket \(t.key): \"\(t.title)\" (\(t.url)). "
+            if let r = t.repo {
+                prompt += "Read it with `gh issue view \(t.key) -R \(r.owner)/\(r.name) --comments`. "
+            } else if let text = await PageTools.pageText(browser: browser), let file = PageTools.saveTemp(text, name: "\(t.key).txt") {
+                prompt += "The ticket page's text is saved at \(file). "
+            }
+            prompt += "Suggested branch: \(t.branch). Look at the relevant code, then propose a plan and wait for my go-ahead before changing files."
+            PageTools.startAgent(prompt, cwd: project, project: name, tasks: model.services.tasks)
+            done("Claude Code opened in \(name)")
+        }
+    }
+
+    /// Docs page → Claude Code with the page text, in your last project so answers can refer to your code.
+    private func askAboutPage(url: String, title: String) {
+        let browser = model.services.context.app?.localizedName ?? "Google Chrome"
+        let cwd = model.services.context.lastProject ?? FileManager.default.homeDirectoryForCurrentUser.path
+        Task {
+            guard let text = await PageTools.pageText(browser: browser), let file = PageTools.saveTemp(text, name: "page.txt") else {
+                done("Turn on Allow JavaScript from Apple Events"); return
+            }
+            let prompt = "I'm reading \"\(title)\" (\(url)). Its text is saved at \(file); read it first. "
+                + "Then answer my questions about it, with examples that fit this project where that helps. Start by asking what I want to know."
+            PageTools.startAgent(prompt, cwd: cwd, project: URL(fileURLWithPath: cwd).lastPathComponent, tasks: model.services.tasks)
+            done("Claude Code opened")
         }
     }
 
@@ -625,6 +699,16 @@ struct AppTabView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                if let latest = ctx.colors.first, let f = TextTools.color(latest) {
+                    HStack(spacing: 6) {
+                        Text(latest).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundStyle(.white.opacity(0.6))
+                        ForEach(Array(f.items.enumerated()), id: \.offset) { _, item in
+                            if case .value(let label, let v, _) = item, ["SwiftUI", "Tailwind", "RGB", "OKLCH"].contains(label) {
+                                chip(label, "doc.on.doc") { copyToClipboard(v); done("\(label) copied") }
+                            }
+                        }
+                    }
+                }
             } else {
                 Text("Picked colours appear here; click one to copy its hex.").font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
             }
@@ -641,6 +725,49 @@ struct AppTabView: View {
         }
     }
 
+    // MARK: AI chat in the browser (Claude / ChatGPT / Gemini)
+
+    /// Replaces the generic browser panel on AI chat sites: chat actions, every chat's state, Claude usage.
+    @ViewBuilder private func aiChatPanel(_ site: AIChatSite) -> some View {
+        let browser = model.services.context.app?.bundleURL?.path ?? ""
+        // Fits the nook without scrolling: sharing on the left; chat actions, export status and agents on the right.
+        HStack(alignment: .top, spacing: 12) {
+            LinkRow(url: url.wrappedValue ?? "", tunnel: model.services.tunnel, done: done).frame(width: 350)
+            VStack(alignment: .leading, spacing: 6) {
+                exportRow(site, browserPath: browser)
+                ScrollView(showsIndicators: false) { workPanel(filter: nil) }
+            }
+        }
+    }
+
+    /// Export this chat as a package (zip), or first ask the chat to write its own handoff.
+    @ViewBuilder private func exportRow(_ site: AIChatSite, browserPath: String) -> some View {
+        let ex = model.services.exporter
+        let browser = model.services.context.app?.localizedName ?? "Google Chrome"
+        HStack(spacing: 6) {
+            chip("Export chat", "shippingbox") { ex.export(site: site, browser: browser, url: url.wrappedValue ?? "") }
+                .disabled(ex.busy)
+            IconButton(symbol: "plus.bubble", help: "New \(site.name) chat") { Browser.open(site.newChat, inBrowserAt: browserPath) }
+            chip("Ask for handoff", "text.bubble") {
+                Task { done(await ChatExporter.askChat(browser: browser) ? "Prompt added; send it, then Export" : "Couldn't find the message box") }
+            }
+            .help("Types a handoff request into this chat (not sent). Send it; when the reply is in, Export uses it.")
+        }
+        switch ex.phase {
+        case .idle: EmptyView()
+        case .working(let s):
+            HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(s).font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)) }
+        case .done(let zip):
+            Button { NSWorkspace.shared.activateFileViewerSelecting([zip]) } label: {
+                Label("Saved to Downloads · Reveal", systemImage: "checkmark.circle.fill").font(.system(size: 10))
+                    .foregroundStyle(.green).lineLimit(1)
+            }
+            .buttonStyle(.plain).help(zip.path)
+        case .failed(let why):
+            Text(why).font(.system(size: 10)).foregroundStyle(.red).lineLimit(1).help(why)
+        }
+    }
+
     // MARK: Shared
 
     private func workPanel(filter project: String?) -> some View {
@@ -653,7 +780,7 @@ struct AppTabView: View {
                 Text("Nothing running").font(.system(size: 11)).foregroundStyle(.white.opacity(0.4))
             }
             ForEach(agents) { a in
-                Button { jump(toApp: a.hostApp) } label: {
+                Button { a.id.hasPrefix(ChatWatcher.idPrefix) ? ChatWatcher.focus(a.id) : jump(toApp: a.hostApp) } label: {
                     HStack(spacing: 6) {
                         Image(systemName: a.state.symbol).foregroundStyle(a.state.color)
                         Text("\(a.name) · \(a.state.label)").font(.system(size: 11)).lineLimit(1)
@@ -743,29 +870,55 @@ enum TestRunner {
     }
 }
 
-/// Runs a command in a login shell (your PATH, nvm etc.), reported as a task with a done/failed chime.
-/// Output goes to a log file you can open from the result.
+/// Runs a command where you can see it: VS Code / Cursor's integrated terminal when one of them is in
+/// front, else a new Terminal window. Wrapped in `islet run`, so it still shows as a task with a chime.
 @MainActor
 func shell(_ command: String, cwd: String, project: String, tasks: TaskStore) {
-    let id = UUID().uuidString
-    let log = FileManager.default.temporaryDirectory.appendingPathComponent("islet-\(id.prefix(8)).log")
-    FileManager.default.createFile(atPath: log.path, contents: nil)
-    let p = Process()
-    p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-    p.arguments = ["-lc", command]
-    p.currentDirectoryURL = URL(fileURLWithPath: cwd)
-    if let h = try? FileHandle(forWritingTo: log) { p.standardOutput = h; p.standardError = h }
-    p.terminationHandler = { proc in
-        let code = proc.terminationStatus
-        Task { @MainActor in tasks.apply(["id": id, "state": "finish", "code": "\(code)", "command": command]) }
+    let line = visibleCommandLine(command, cwd: cwd)
+    if let front = NSWorkspace.shared.frontmostApplication, AppContext.codeIDs.contains(front.bundleIdentifier ?? ""),
+       AXIsProcessTrusted() {
+        typeInEditorTerminal(line, app: front)
+    } else {
+        // Opening a .command file runs it in Terminal without Automation permission. -il: your PATH, nvm etc.
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("islet-\(UUID().uuidString.prefix(8)).command")
+        guard (try? "#!/bin/zsh -il\nclear\n\(line)\n".write(to: url, atomically: true, encoding: .utf8)) != nil,
+              (try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)) != nil else { return }
+        NSWorkspace.shared.open(url)
     }
-    do {
-        try p.run()
-        tasks.apply(["id": id, "state": "start", "command": command, "project": project,
-                     "pid": String(p.processIdentifier), "cwd": cwd])
-    } catch {
-        tasks.apply(["id": id, "state": "start", "command": command, "project": project])
-        tasks.apply(["id": id, "state": "finish", "code": "127", "command": command])
+}
+
+/// `cd 'dir' && islet run zsh -c 'command'`; plain command if the bundled CLI is missing (dev builds).
+func visibleCommandLine(_ command: String, cwd: String) -> String {
+    func q(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
+    let cli = ClaudeHooks.cliPath
+    let run = FileManager.default.isExecutableFile(atPath: cli) ? "\(q(cli)) run zsh -c \(q(command))" : command
+    return "cd \(q(cwd)) && \(run)"
+}
+
+/// New integrated terminal (⌃⇧`, VS Code's default binding), then types the line and Return.
+/// ponytail: keystrokes break if the user rebinds "new terminal"; a tiny VS Code extension is the upgrade path.
+@MainActor
+private func typeInEditorTerminal(_ line: String, app: NSRunningApplication) {
+    app.activate()
+    func key(_ code: CGKeyCode, _ flags: CGEventFlags = []) {
+        for down in [true, false] {
+            let e = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)
+            e?.flags = flags
+            e?.postToPid(app.processIdentifier)
+        }
+    }
+    key(50, [.maskControl, .maskShift])  // kVK_ANSI_Grave
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {  // terminal panel opens and takes focus
+        let utf16 = Array(line.utf16)
+        for start in stride(from: 0, to: utf16.count, by: 20) {  // CGEvent carries at most 20 UTF-16 units
+            var chunk = Array(utf16[start..<min(start + 20, utf16.count)])
+            for down in [true, false] {
+                let e = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: down)
+                e?.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: &chunk)
+                e?.postToPid(app.processIdentifier)
+            }
+        }
+        key(36)  // Return
     }
 }
 
@@ -780,5 +933,20 @@ struct CustomAction: Codable, Identifiable, Equatable {
     @MainActor
     static func run(_ a: CustomAction, tasks: TaskStore) {
         shell(a.command, cwd: FileManager.default.homeDirectoryForCurrentUser.path, project: a.appName, tasks: tasks)
+    }
+}
+
+
+/// AI chat sites that get their own App-tab panel (and are watched by ChatWatcher).
+struct AIChatSite {
+    let host: String, name: String, newChat: String
+    static let all = [
+        AIChatSite(host: "claude.ai", name: "Claude", newChat: "https://claude.ai/new"),
+        AIChatSite(host: "chatgpt.com", name: "ChatGPT", newChat: "https://chatgpt.com/"),
+        AIChatSite(host: "gemini.google.com", name: "Gemini", newChat: "https://gemini.google.com/app"),
+    ]
+    static func match(_ url: String?) -> AIChatSite? {
+        guard let host = url.flatMap({ URL(string: $0)?.host }) else { return nil }
+        return all.first { $0.host == host }
     }
 }

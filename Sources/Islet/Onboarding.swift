@@ -160,7 +160,7 @@ private struct OnboardingView: View {
     private var permissions: some View {
         VStack(alignment: .leading, spacing: 14) {
             header("lock.shield", "Permissions").frame(maxWidth: .infinity)
-            permissionRow("Accessibility", "Double-tap Control and keyboard shortcuts. Islet reads only the Control key state, never what you type.",
+            permissionRow("Accessibility", "Double-tap Control and keyboard shortcuts. Islet reads only the Control and Shift key states, never what you type.",
                           granted: AXIsProcessTrusted()) {
                 AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)

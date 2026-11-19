@@ -4,17 +4,39 @@ import SwiftUI
 /// Hardware notch size, or a fake pill on screens without one.
 struct NotchGeometry {
     let notch: CGSize
+    /// Space between the top of the screen and the pill. Non-zero only for the floating M1 look.
+    let topGap: CGFloat
 
     init(screen: NSScreen) {
-        if screen.safeAreaInsets.top > 0,
+        // Testing on a notched Mac: `defaults write <bundle id> forceFloating -bool YES`
+        let force = UserDefaults.standard.bool(forKey: "forceFloating")
+        if !force, screen.safeAreaInsets.top > 0,
            let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea {
             notch = CGSize(width: screen.frame.width - left.width - right.width,
                            height: screen.safeAreaInsets.top)
+            topGap = 0
         } else {
             let menuBar = screen.frame.maxY - screen.visibleFrame.maxY
             notch = CGSize(width: 190, height: max(menuBar, 24))
+            topGap = force || Self.floating ? 4 : 0
         }
     }
+
+    /// Classic (flush with the top edge) or floating (small gap, like the newer MacBook Pro look) for screens
+    /// without a notch. Default: floating on M1 MacBooks, classic elsewhere.
+    static var floating: Bool {
+        UserDefaults.standard.object(forKey: "floatingNotch") as? Bool ?? isM1MacBook
+    }
+
+    /// M1 MacBook Air and 13" MacBook Pro: the only M1 laptops without a notch.
+    /// Model ID, not chip name: "Apple M1 Pro/Max" 14"/16" (MacBookPro18,x) do have one.
+    static let isM1MacBook: Bool = {
+        var size = 0
+        sysctlbyname("hw.model", nil, &size, nil, 0)
+        var buf = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.model", &buf, &size, nil, 0)
+        return ["MacBookAir10,1", "MacBookPro17,1"].contains(String(cString: buf))
+    }()
 }
 
 /// One borderless, non-activating panel pinned to the top centre of a screen.
@@ -28,7 +50,9 @@ final class NotchController {
 
     init(screen: NSScreen, media: MediaService, tray: TrayStore, activities: ActivityCenter, services: Services) {
         screenFrame = screen.frame
-        model = NotchModel(notchSize: NotchGeometry(screen: screen).notch, media: media, tray: tray, activities: activities, services: services)
+        let geometry = NotchGeometry(screen: screen)
+        model = NotchModel(notchSize: geometry.notch, media: media, tray: tray, activities: activities, services: services)
+        model.topGap = geometry.topGap
 
         panel = KeyOnDemandPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                                  backing: .buffered, defer: false)
@@ -39,8 +63,9 @@ final class NotchController {
         panel.hasShadow = false
         panel.isMovable = false
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
-        // No .fullScreenAuxiliary: hides itself over full-screen apps for free.
+        // Without .fullScreenAuxiliary the panel hides itself over full-screen apps and videos (default).
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        if !services.prefs.hideInFullScreen { panel.collectionBehavior.insert(.fullScreenAuxiliary) }
 
         let host = HoverHostingView(rootView: NotchView(model: model))
         panel.contentView = host
@@ -236,9 +261,11 @@ final class NotchController {
     }
 
     private func resize(to size: CGSize) {
+        // Panel still reaches the screen edge across the gap, so pushing the pointer to the top still hovers it.
+        let height = size.height + model.topGap
         panel.setFrame(NSRect(x: screenFrame.midX - size.width / 2,
-                              y: screenFrame.maxY - size.height,
-                              width: size.width, height: size.height), display: true)
+                              y: screenFrame.maxY - height,
+                              width: size.width, height: height), display: true)
         // Commit the new layout now, outside any animation, so the shape stays centred
         // under the notch instead of sliding in from the window's new left edge.
         panel.contentView?.layoutSubtreeIfNeeded()

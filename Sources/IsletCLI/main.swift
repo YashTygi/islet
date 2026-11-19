@@ -6,6 +6,8 @@
 //   islet hook claude                Claude Code hook (reads hook JSON on stdin)
 //   islet hook codex <json>          Codex `notify` program
 //   islet settings                   open the control panel
+//   islet shell-init zsh             shell hook: eval "$(islet shell-init zsh)" in ~/.zshrc
+//   islet cmd <code> <start> <cwd> <command>   (called by the hook) log one finished command
 //
 // Events are distributed notifications (com.yashtyagi.Islet.event) with string payloads.
 // If Islet isn't running they are simply dropped; the CLI never blocks your command.
@@ -56,6 +58,7 @@ func usage() -> Never {
            islet agent <running|waiting|done|error|ended> [--name N] [--project P] [--id I] [--message M]
            islet hook claude | islet hook codex <json>
            islet settings
+           islet shell-init zsh
 
     """.utf8))
     exit(2)
@@ -66,11 +69,56 @@ guard let cmd = args.first else { usage() }
 args.removeFirst()
 
 switch cmd {
+case "shell-init":
+    guard args.first == "zsh" else { usage() }
+    // Our own path (resolved, so the hook keeps working however `islet` was found).
+    var buf = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+    let me = proc_pidpath(getpid(), &buf, UInt32(buf.count)) > 0 ? String(cString: buf) : CommandLine.arguments[0]
+    let q = "'" + me.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    print("""
+    # Islet shell hook: logs each command (text, folder, exit code, duration) on this Mac only.
+    # Commands that start with a space are skipped, like zsh's histignorespace.
+    zmodload zsh/datetime 2>/dev/null
+    typeset -g __islet_cmd="" __islet_t0=0
+    __islet_preexec() { if [[ "$1" == " "* ]]; then __islet_cmd=""; else __islet_cmd="$1"; __islet_t0=$EPOCHREALTIME; fi }
+    __islet_precmd() {
+      local code=$?
+      [[ -n "$__islet_cmd" ]] || return 0
+      \(q) cmd "$code" "$__islet_t0" "$PWD" "$__islet_cmd" >/dev/null 2>&1 &!
+      __islet_cmd=""
+    }
+    autoload -Uz add-zsh-hook
+    add-zsh-hook preexec __islet_preexec
+    add-zsh-hook precmd __islet_precmd
+    """)
+
+case "cmd":
+    // Called in the background after every command: never print, never block.
+    guard args.count >= 4, let code = Int(args[0]) else { exit(0) }
+    let command = args[3...].joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    let secret = #"(?i)(password|passwd|secret|token|api[_-]?key|bearer|authorization|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_\-]{20,}|xox[abprs]-|-----BEGIN)"#
+    guard !command.isEmpty, command.count < 2000, command.range(of: secret, options: .regularExpression) == nil else { exit(0) }
+    let now = Date().timeIntervalSince1970
+    let start = Double(args[1].replacingOccurrences(of: ",", with: ".")) ?? now
+    let entry: [String: Any] = ["t": Int(now), "cmd": command, "cwd": args[2], "code": code,
+                                "dur": (max(0, now - start) * 10).rounded() / 10, "app": hostApp().isEmpty ? "" : URL(fileURLWithPath: hostApp()).deletingPathExtension().lastPathComponent]
+    let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Islet")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let file = dir.appendingPathComponent("commands.jsonl")
+    if var line = try? JSONSerialization.data(withJSONObject: entry, options: [.withoutEscapingSlashes]) {
+        line.append(0x0A)
+        // O_APPEND: whole-line writes from parallel shells don't interleave.
+        let fd = open(file.path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
+        if fd >= 0 { _ = line.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }; close(fd) }
+    }
+    post(["kind": "command", "code": String(code), "command": String(command.prefix(300)), "cwd": args[2]])
+
 case "run":
     guard !args.isEmpty else { usage() }
     let id = UUID().uuidString
     let cwd = FileManager.default.currentDirectoryPath
-    let command = args.joined(separator: " ")
+    // Islet's own runs come as `zsh -c 'cmd'`: show (and re-run) just cmd.
+    let command = args.count == 3 && args[0] == "zsh" && args[1] == "-c" ? args[2] : args.joined(separator: " ")
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     p.arguments = args  // stdio is inherited: output stays in your terminal
@@ -105,9 +153,12 @@ case "hook":
         let data = FileHandle.standardInput.readDataToEndOfFile()
         let j = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         let event = j["hook_event_name"] as? String ?? ""
+        // idle_prompt fires ~60 s after a finished turn ("waiting for your input"): nothing to resolve, session stays done.
+        let idle = j["notification_type"] as? String == "idle_prompt"
+            || (j["message"] as? String ?? "").hasPrefix("Claude is waiting for your input")
         let state: String? = switch event {
         case "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse": "running"
-        case "Notification": "waiting"   // permission request or idle prompt
+        case "Notification": idle ? nil : "waiting"   // permission request, question
         case "Stop": "done"
         case "SessionEnd": "ended"
         default: nil

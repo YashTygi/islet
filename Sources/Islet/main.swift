@@ -33,9 +33,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         signal(SIGTERM, SIG_IGN)
         termSource.setEventHandler { NSApp.terminate(nil) }
         termSource.resume()
+        if let q = ProcessInfo.processInfo.environment["ISLET_RECALL"] {  // dev hook: run command recall without speaking
+            Task { @MainActor in
+                let cwd = ProcessInfo.processInfo.environment["ISLET_RECALL_CWD"]
+                let all = await CommandRecall.candidates(cwd: cwd)
+                let picks = CommandRecall.prefilter(q, all, cwd: cwd)
+                print("candidates: \(all.count) (\(Dictionary(grouping: all, by: \.source).mapValues(\.count))), sent: \(picks.count)")
+                let t0 = Date()
+                for m in await CommandRecall.ask(query: q, screen: ProcessInfo.processInfo.environment["ISLET_RECALL_SCREEN"], cwd: cwd, candidates: picks) ?? [] {
+                    print("→ [\(m.source)] \(m.command)   — \(m.why)")
+                }
+                print(String(format: "took %.1f s", Date().timeIntervalSince(t0)))
+                exit(0)
+            }
+            return
+        }
         if ProcessInfo.processInfo.environment["ISLET_SELFTEST"] != nil {
             DoubleTapDetector.selfTest()
             CLIInstaller.selfTest()
+            ChatWatcher.selfTest()
+            TextTools.selfTest()
+            ChatExporter.selfTest()
+            CommandLog.selfTest()
+            StrayProcesses.selfTest()
+            PageTools.selfTest()
+            VoiceInput.selfTest()
+            TextInserter.selfTest()
+            CorrectionLearner.selfTest()
+            CommandRecall.selfTest()
             exit(0)
         }
         media.state.onActiveChange = { [weak self] on in self?.activities.mediaActive = on }
@@ -53,6 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         events.start()
         services.downloads.start()
         services.context.start()
+        services.chats.start()
+        Task.detached(priority: .background) { CommandLog.trim() }
         services.tunnel.onChange = { [weak self] s in
             if case .live(_, let url) = s { self?.activities.tunnelURL = url } else { self?.activities.tunnelURL = nil }
         }
@@ -105,7 +132,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Open on the screen the pointer is on; make sure no other screen stays locked.
             let target = self.controllers.first { $0.screenFrame.contains(mouse) } ?? self.controllers.first
             for c in self.controllers where c !== target { c.model.unlock(pointerInside: false) }
-            target?.toggleLock()
+            guard let target, !target.model.isLocked else { target?.toggleLock(); return }
+            // Opening: selected text in the front app → App tab shows tools for it.
+            let ctx = self.services.context
+            let project: String? = if case .code = ctx.context { ctx.codeProject()?.path } else { nil }
+            Task { @MainActor in
+                if let sel = await Selection.read(project: project) {
+                    target.model.selection = sel
+                    target.model.tab = .app
+                }
+                target.toggleLock()
+            }
+        }
+        // Hold Control + Shift: talk. Only the wave in the pill while talking; words go into the field you're
+        // focused on (live where the app allows, else pasted on release). Nothing focused: bubble with Copy after.
+        var inserter: TextInserter?
+        let learner = CorrectionLearner(prefs: services.prefs)
+        var terminal: NSRunningApplication?   // talking in a terminal = "find the command I ran for …"
+        hotkey.onTalkStart = { [weak self] in
+            guard let self, self.services.prefs.hotkey, !self.services.voice.active else { return }
+            let mouse = NSEvent.mouseLocation
+            guard (self.controllers.first(where: { $0.screenFrame.contains(mouse) }) ?? self.controllers.first) != nil else { return }
+            debugLog("voice: hold started")
+            learner.stop()  // record fixes to the last dictation before typing the next one
+            inserter = nil
+            terminal = CommandRecall.terminalFocused()
+            let voice = self.services.voice
+            voice.onPhrase = { phrase in inserter?.add(phrase) }
+            self.activities.listening = true
+            voice.start()
+            if terminal != nil { debugLog("voice: terminal → command recall"); return }
+            Task { @MainActor in
+                if let t = await TextTarget.focused() { inserter = TextInserter(t) }
+                debugLog("voice: focused field \(inserter == nil ? "none" : (inserter!.target.element == nil ? "web (paste)" : "AX"))")
+            }
+        }
+        hotkey.onTalkEnd = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                let voice = self.services.voice, bubble = self.services.bubble
+                await voice.stopAndWait()
+                self.activities.listening = false
+                voice.onPhrase = nil
+                let mouse = NSEvent.mouseLocation
+                let c = self.controllers.first(where: { $0.screenFrame.contains(mouse) }) ?? self.controllers.first
+                defer { inserter = nil }
+                if case .failed(let why) = voice.phase {
+                    if let c { bubble.present(.failed(why), on: c.screenFrame, notchHeight: c.model.notchSize.height) }
+                    return
+                }
+                guard !voice.text.isEmpty else { voice.clear(); return }
+                if let term = terminal, let c {
+                    terminal = nil
+                    let query = voice.text
+                    bubble.recallApp = term
+                    bubble.present(.recall(query: query, matches: nil, error: nil), on: c.screenFrame, notchHeight: c.model.notchSize.height)
+                    let cwd = CommandLog.recent(1, distinct: false).first?.cwd
+                    async let screen = CommandRecall.screen(term)
+                    let all = await CommandRecall.candidates(cwd: cwd)
+                    let picks = CommandRecall.prefilter(query, all, cwd: cwd)
+                    let found = await CommandRecall.ask(query: query, screen: await screen, cwd: cwd, candidates: picks)
+                    debugLog("recall: \(all.count) commands, \(picks.count) to Claude, \(found?.count ?? -1) back")
+                    bubble.showRecall(query: query, matches: found,
+                                      error: found == nil ? (findTool("claude") == nil ? "Needs Claude Code (the claude command)." : "Couldn't get an answer, try again.") : nil)
+                    return
+                }
+                if let ins = inserter {
+                    ins.finish(voice.text)  // already in the field (or pasted now): nothing to show
+                    learner.watch(ins.target, dictated: voice.text)
+                    voice.clear()
+                } else if let c {
+                    bubble.present(.result, on: c.screenFrame, notchHeight: c.model.notchSize.height)
+                }
+            }
         }
         hotkey.start(prompt: !firstRun)
         if firstRun {
@@ -162,7 +261,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         activities.haptics = p.haptics
         activities.keepAwakeEnabled = p.keepAwake
         services.downloads.autoShelf = p.autoShelf
+        let layout = [p.hideInFullScreen, p.floatingNotch]
+        if layout != lastLayout { lastLayout = layout; rebuild() }
     }
+    /// Panel settings that need the notch rebuilt (set on first apply, so launch doesn't rebuild twice).
+    private lazy var lastLayout = [services.prefs.hideInFullScreen, services.prefs.floatingNotch]
 
     /// Opening the app again (Finder, Spotlight, `open`) shows the control panel.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
